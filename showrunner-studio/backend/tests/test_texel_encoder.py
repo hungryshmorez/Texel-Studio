@@ -185,7 +185,7 @@ class EncoderTests(unittest.TestCase):
                     self.assertNotIn('SECRET', public)
                     self.assertNotIn('storage.example', public)
                     self.assertNotIn('payload', public)
-                    def download(_url, output): output.write_bytes(b'mocked verified media')
+                    def download(_url, output, **_bounds): output.write_bytes(b'mocked verified media')
                     with patch('texel_routes.TexelEncoderClient.submit') as resubmit, patch('texel_routes.TexelEncoderClient.status', return_value={'completed': True, 'progress': 100}) as status, patch('texel_routes.TexelEncoderClient.download_video', side_effect=download):
                         self.assertEqual(client.post(path + '/cloud-render/resume').status_code, 202)
                         deadline = time.monotonic() + 5

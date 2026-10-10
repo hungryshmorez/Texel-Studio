@@ -28,14 +28,33 @@ def validate_audio(path: Path):
         raise ValueError("Use an audio file between 1 second and 10 minutes long.")
 
 
-def validate_video(path: Path):
-    result = json.loads(_run(["ffprobe", "-v", "error", "-protocol_whitelist", "file,pipe", "-show_streams", "-show_format", "-of", "json", str(path)], timeout=15))
-    streams = [s for s in result.get("streams", []) if s.get("codec_type") == "video"]
-    duration = float(result.get("format", {}).get("duration", 0))
-    if not streams or not 0 < duration <= 120:
+def probe(path: Path) -> dict:
+    """ffprobe summary used to validate both generated and user-uploaded media."""
+    result = json.loads(_run(["ffprobe", "-v", "error", "-protocol_whitelist", "file,pipe", "-show_streams", "-show_format", "-of", "json", str(path)], timeout=30))
+    streams = result.get("streams", [])
+    video = [s for s in streams if s.get("codec_type") == "video" and s.get("disposition", {}).get("attached_pic") != 1]
+    return {"duration": float(result.get("format", {}).get("duration", 0) or 0), "has_video": bool(video),
+            "has_audio": any(s.get("codec_type") == "audio" for s in streams),
+            "width": max((int(s.get("width", 0)) for s in video), default=0), "height": max((int(s.get("height", 0)) for s in video), default=0),
+            "pixels": max((int(s.get("width", 0)) * int(s.get("height", 0)) for s in video), default=0)}
+
+
+def validate_video(path: Path, max_seconds: float = 120, expected_seconds: float | None = None, expect_audio: bool = False):
+    """Short generated clips keep the 120 s cap. Assembled cloud cuts pass the
+    plan's expected duration instead, which bounds the result to that length
+    (plus encoder padding tolerance) rather than to an arbitrary constant.
+    """
+    info = probe(path)
+    if expected_seconds is not None:
+        tolerance = max(1.5, expected_seconds * 0.02)
+        if not info["has_video"] or abs(info["duration"] - expected_seconds) > tolerance:
+            raise ValueError("The rendered video does not match the planned length.")
+    elif not info["has_video"] or not 0 < info["duration"] <= max_seconds:
         raise ValueError("Generated media is not a supported short video.")
-    if any(int(s.get("width", 0)) * int(s.get("height", 0)) > 16_000_000 for s in streams):
+    if info["pixels"] > 16_000_000:
         raise ValueError("Generated video exceeds the pixel limit.")
+    if expect_audio and not info["has_audio"]:
+        raise ValueError("The rendered video is missing its audio track.")
 
 
 def _font(size):

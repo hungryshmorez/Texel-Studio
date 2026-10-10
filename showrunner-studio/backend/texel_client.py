@@ -175,7 +175,7 @@ class TexelClient:
             progress = 0
         return {"completed": False, "progress": progress}
 
-    def download_video(self, url: str, path) -> None:
+    def download_video(self, url: str, path, max_bytes: int = 100 * 1024 * 1024, **validation) -> None:
         # Signed media URLs are untrusted and must never receive our API key.
         temporary = path.with_suffix(".part")
         try:
@@ -193,11 +193,14 @@ class TexelClient:
                         with temporary.open("wb") as output:
                             for chunk in response.iter_bytes():
                                 size += len(chunk)
-                                if size > 100 * 1024 * 1024:
-                                    raise TexelError("Generated video exceeded the 100 MB limit.")
+                                if size > max_bytes:
+                                    raise TexelError(f"Generated video exceeded the {max_bytes // (1024 * 1024)} MB limit.")
                                 output.write(chunk)
                         from trailer_render import validate_video
-                        validate_video(temporary)
+                        try:
+                            validate_video(temporary, **validation)
+                        except ValueError as exc:
+                            raise TexelError(str(exc)) from exc
                         temporary.replace(path)
                         return
                 raise TexelError("Too many redirects downloading the generated video.")
