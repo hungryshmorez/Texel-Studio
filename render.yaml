@@ -1,0 +1,31 @@
+# Render Blueprint: one always-on instance with a persistent disk (jobs and media live in SQLite + disk).
+# Deploy: Render dashboard -> New -> Blueprint -> pick this repo/branch, then fill the secret values.
+services:
+  - type: web
+    name: texel-studio
+    runtime: docker
+    dockerContext: showrunner-studio
+    dockerfilePath: showrunner-studio/Dockerfile
+    plan: starter
+    healthCheckPath: /api/health
+    disk:
+      name: studio-data
+      mountPath: /data
+      sizeGB: 5
+    envVars:
+      - key: APP_PASSWORD
+        sync: false
+      - key: TEXEL_EDITING_API_KEY
+        sync: false
+      - key: TEXEL_API_KEY
+        sync: false
+      - key: TEXEL_S3_ENDPOINT
+        sync: false
+      - key: TEXEL_S3_BUCKET
+        sync: false
+      - key: TEXEL_S3_ACCESS_KEY_ID
+        sync: false
+      - key: TEXEL_S3_SECRET_ACCESS_KEY
+        sync: false
+      - key: TEXEL_S3_REGION
+        value: auto

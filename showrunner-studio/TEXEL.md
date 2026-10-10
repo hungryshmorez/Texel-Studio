@@ -107,3 +107,17 @@ and its player URLs are an undocumented implementation detail.
 - Browser (Playwright): the "I already host my files" panel, with two HTTPS URL clips and a song at 8.9 s, rendered a 135 s cut through the real backend; same caveat — a local HTTPS stand-in and a simulated encoder, not live Texel.
 - Not implemented: authentication and per-user quotas (single-user dev service), an account-wide cap
   of two concurrent Texel requests across replicas, multi-track audio mixing.
+
+## Hosting it on a public URL
+
+The backend serves the built frontend (`frontend/dist`) from the same origin and, when `APP_PASSWORD` is
+set, requires it (browser login prompt, any username) for everything except `/api/health`.
+`TEXEL_REQUIRE_PASSWORD=1` (set in the Dockerfile) refuses to start without it. This is a shared
+password, not user accounts or per-user quotas.
+
+`showrunner-studio/Dockerfile` builds both halves into one container; `render.yaml` is a Render Blueprint
+(always-on instance plus a persistent disk at `/data`, required because jobs are in SQLite and media is on disk).
+Run exactly one instance. Set `APP_PASSWORD`, `TEXEL_EDITING_API_KEY`, `TEXEL_API_KEY` and the `TEXEL_S3_*` values
+as secrets in the host's dashboard, never in the repo. Large uploads pass through the host's proxy, so check its request-size limit;
+a bucket plus the paste-URL panel avoids that. Verified: password gate and static serving run locally. Not verified: the Docker image build
+and any real deployment (no Docker daemon or hosting account in the authoring environment).

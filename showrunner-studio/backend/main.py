@@ -743,3 +743,8 @@ async def rewrite_start(req: RewriteScriptRequest):
         return [SURGICAL_SYSTEM_PROMPT + genre_focus_block(req.genre), prompt]
 
     return _start_ai_job(builder)
+
+
+import site_setup  # noqa: E402
+
+site_setup.install(app)
