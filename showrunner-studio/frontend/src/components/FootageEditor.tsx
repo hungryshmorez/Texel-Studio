@@ -6,6 +6,7 @@ import { ArrowDown, ArrowLeft, ArrowUp, Download, Film, Music, Trash2, Upload } 
 import { jsonRequest, texelRequest, type TexelAsset, type TexelCapabilities, type TexelTrailer } from "../lib/texelExport";
 import { Button, Chip, Field, Spinner, TextInput as Input } from "./ui";
 import { useConfirm } from "./ConfirmDialog";
+import { HostedUrlPanel } from "./HostedUrlPanel";
 
 const PROJECT_KEY = "texel-studio:footage-project";
 const SHOW_ID = "media-projects";
@@ -228,6 +229,8 @@ export function FootageEditor({ onClose }: { onClose: () => void }) {
         </section>
 
         <Button variant="primary" size="md" className="w-full" disabled={working || running || !ready} onClick={() => void render()}>{running ? "Rendering…" : "Render with Texel"}</Button>
+
+        <HostedUrlPanel projectId={project.id} disabled={working || running || !caps?.cloud_configured} onProject={setProject} onError={setError} />
 
         {cloud && <div className="space-y-2 text-[12px]">
           <p role="status" className="flex items-center gap-2 text-amber-300">{running && <Spinner />}Texel render: {cloud.status} · {cloud.progress}%</p>

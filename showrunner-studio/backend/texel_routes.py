@@ -115,6 +115,31 @@ class EditRender(BaseModel):
         return self
 
 
+class UrlClip(BaseModel):
+    url: str = Field(min_length=1, max_length=8192)
+    start_seconds: float = Field(default=0, ge=0, le=7200, allow_inf_nan=False)
+    duration_seconds: float = Field(gt=0, le=300, allow_inf_nan=False)
+
+
+class UrlRender(BaseModel):
+    """Bring-your-own hosting: caller supplies signed input URLs and an output PUT/read pair."""
+    clips: list[UrlClip] = Field(min_length=1, max_length=MAX_EDIT_CLIPS)
+    output_upload_url: str = Field(min_length=1, max_length=8192)
+    output_read_url: str = Field(min_length=1, max_length=8192)
+    audio_url: str | None = Field(default=None, max_length=8192)
+    audio_start_seconds: float = Field(default=0, ge=0, le=7200, allow_inf_nan=False)
+    enhance_voice: bool = False
+    preserve_audio: bool = True
+    normalize_audio: bool = True
+    fps: int = Field(default=30)
+
+    @model_validator(mode="after")
+    def valid_fps(self):
+        if self.fps not in (24, 30):
+            raise ValueError("Choose 24 or 30 fps.")
+        return self
+
+
 class CloudResume(BaseModel):
     output_read_url: str | None = Field(default=None, min_length=1, max_length=8192)
 
@@ -368,6 +393,14 @@ class TrailerService:
                 "preserve_audio": req.preserve_audio, "normalize_audio": req.normalize_audio, "fps": req.fps}
         return self.cloud_render(trailer_id, plan, shots=shots)
 
+    def url_render(self, trailer_id, req: UrlRender):
+        if self.store.get(trailer_id).get("mode") != "edit":
+            raise ValueError("Cloud editing from URLs needs a footage-editing project.")
+        shots = [{"id": f"c{i}", "duration_seconds": c.duration_seconds} for i, c in enumerate(req.clips)]
+        plan = {**req.model_dump(exclude={"clips"}), "clips": [{"shot_id": f"c{i}", "url": c.url, "start_seconds": c.start_seconds,
+                                                              "duration_seconds": c.duration_seconds} for i, c in enumerate(req.clips)]}
+        return self.cloud_render(trailer_id, plan, shots=shots)
+
     def cloud_render(self, trailer_id, plan=None, resume=False, shots=None):
         if not (os.environ.get("TEXEL_EDITING_API_KEY") or os.environ.get("TEXEL_API_KEY")):
             raise ValueError("Set TEXEL_EDITING_API_KEY on the backend before rendering with Texel.")
@@ -611,6 +644,11 @@ def edit_render(trailer_id: str, req: EditRender):
         return public_body(_call(service().edit_render, trailer_id, req))
     except StorageError as exc:
         raise HTTPException(502, str(exc))
+
+
+@router.post("/trailers/{trailer_id}/url-render", status_code=202)
+def url_render(trailer_id: str, req: UrlRender):
+    return public_body(_call(service().url_render, trailer_id, req))
 
 
 @router.post("/trailers/{trailer_id}/audio")

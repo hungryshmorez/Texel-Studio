@@ -86,9 +86,18 @@ Clips up to 12 per edit project (the 3-clip limit applies only to scene-based tr
 must contain audio when "keep original audio" is on and no soundtrack is chosen; the backend rejects
 silent sources before any paid job.
 
+### Bring-your-own hosting (no bucket)
+
+`POST /trailers/{id}/url-render` (UI: "I already host my files" in Edit footage) takes caller-supplied
+signed input URLs, an output upload (PUT) URL and an output read URL, and reuses the same encoder
+contract and bounded download validation. Lengths are required per clip because remote files cannot be
+probed. This mirrors how the verified job `254c23d1-8f4b-468a-b1da-41f04d814acd` (191.6 s, trailer →
+music video → episode) was run. The app does not implement storage.to: its share links are HTML pages
+and its player URLs are an undocumented implementation detail.
+
 ### Verification status
 
-- Automated: 28 backend tests (`uv run python -m unittest discover -s tests`) including AWS's published
+- Automated: 29 backend tests (`uv run python -m unittest discover -s tests`) including AWS's published
   SigV4 presign vector, a 191.6 s cut that the old validator rejected, and an upload → render →
   download service flow with fake storage and a fake encoder.
 - Browser (Playwright, real UI + real backend): upload of four files, trailer → music video → episode

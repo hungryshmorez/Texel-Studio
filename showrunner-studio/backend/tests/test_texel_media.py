@@ -207,6 +207,26 @@ class EditFlowTests(unittest.TestCase):
             self.assertEqual(self.upload(project, self.clip_a).status_code, 409)
         self.assertEqual(FakeEncoder.payloads, [])
 
+    def test_user_supplied_signed_urls_render_without_any_storage(self):
+        project = self.project()
+        FakeEncoder.source = make_media(self.tmp / "own.mp4", 12, size="1280x720")
+        body = {"clips": [{"url": "https://cdn.example.com/a?sig=1", "start_seconds": 1, "duration_seconds": 6}, {"url": "https://cdn.example.com/b?sig=2", "duration_seconds": 6}],
+                "audio_url": "https://cdn.example.com/song?sig=3", "audio_start_seconds": 8.9,
+                "output_upload_url": "https://r2.example.com/out?sig=put", "output_read_url": "https://r2.example.com/out?sig=get"}
+        with patch("texel_routes.ObjectStorage.from_env", return_value=None):
+            response = self.http.post(f"/api/texel/trailers/{project}/url-render", json=body)
+            self.assertEqual(response.status_code, 202)
+            for _ in range(100):
+                state = self.http.get(f"/api/texel/trailers/{project}").json()
+                if state["cloud_render"]["status"] != "running":
+                    break
+                time.sleep(0.1)
+        self.assertEqual(state["cloud_render"]["status"], "complete", state["cloud_render"])
+        payload = FakeEncoder.payloads[0]
+        self.assertEqual(payload["outputs"][0]["url"], body["output_upload_url"])
+        self.assertEqual([i["url"] for i in payload["inputs"]], [body["clips"][0]["url"], body["clips"][1]["url"], body["audio_url"]])
+        self.assertNotIn("sig=", json.dumps(state))
+
     def test_cut_longer_than_two_minutes_completes_through_the_service(self):
         project = self.project()
         source = make_media(self.tmp / "long-source.mp4", 150, size="640x360")
