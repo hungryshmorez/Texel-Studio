@@ -41,16 +41,16 @@ Texel Studio is a React + TypeScript app with a FastAPI backend. Alongside the f
 ## Quick start
 
 ### GitHub Codespaces (works from a browser or tablet)
-1. Open https://codespaces.new/hungryshmorez/filmtemplate/tree/ccr-86d77b34-m487zb and choose **Create codespace**. Setup installs Node 24, Python, uv, ffmpeg and the locked dependencies, then starts both servers.
+1. Open https://codespaces.new/hungryshmorez/Texel-Studio and choose **Create codespace**. Setup installs Node 24, Python, uv, ffmpeg and the locked dependencies, then starts both servers.
 2. In the terminal, add your keys (see [Configuration](#configuration)):
    ```bash
-   cd /workspaces/filmtemplate/showrunner-studio
+   cd /workspaces/Texel-Studio/showrunner-studio
    cp .env.example .env      # then edit .env
    ```
 3. Restart the app so it reads `.env`:
    ```bash
    pkill -f uvicorn; pkill -f vite
-   cd /workspaces/filmtemplate && bash .devcontainer/start.sh
+   cd /workspaces/Texel-Studio && bash .devcontainer/start.sh
    ```
 4. Open the **Ports** tab, find port **3001**, and open it in the browser. Keep the port **Private** unless someone else must use it: the dev build has no login, and a render spends Texel credits.
 
