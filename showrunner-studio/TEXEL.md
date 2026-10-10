@@ -64,3 +64,36 @@ uv run python -m unittest discover -s tests -v
 ```
 
 Tests cover production encoder payloads and statuses, client-ID recovery after an ambiguous submission, signed URL redaction, execution of the standard encoder filter graph, SDK image/video payloads, authenticated job polling, safe downloads, resume without resubmission, clip-based exports, response decoding, approval and retry gates, idempotent plans, restart recovery, protected media paths, optional audio validation, real FFmpeg assembly, MP4 duration/resolution, downloading, and reassembly without another provider call.
+
+## Footage editing with backend-managed storage
+
+`Edit footage` (top bar) creates a media project (`POST /api/texel/edits`). Files are uploaded to the
+backend (`POST /trailers/{id}/assets`, up to 1 GB each), probed with ffprobe (duration, audio
+presence, resolution), stored in the S3-compatible bucket configured by `TEXEL_S3_*`, and referenced by
+asset ID. `POST /trailers/{id}/edit-render` builds the encoder payload server-side: it mints presigned
+read URLs for inputs and a presigned write/read pair for the output, then reuses the verified encoder
+contract (AAC `quality: "2"`, source in-points, per-clip lengths, single-pass `loudnorm`). Storage
+keys and signed URLs stay in the backend store; snapshots contain neither. Resume mints a fresh
+output read link, so expired links need no user action. After the cut is downloaded and validated,
+the transient output object is deleted; uploaded sources remain until deleted from the project.
+
+Validation policies are separate. Generated FramePack clips keep the 120 s / 100 MiB limits. Assembled
+cloud cuts are validated against the submitted plan: duration within max(1.5 s, 2%) of the sum of clip
+lengths, an audio stream when audio was requested, and a size cap scaled to the planned duration
+(100 MiB floor, 4 GiB ceiling).
+
+Clips up to 12 per edit project (the 3-clip limit applies only to scene-based trailers). Every source
+must contain audio when "keep original audio" is on and no soundtrack is chosen; the backend rejects
+silent sources before any paid job.
+
+### Verification status
+
+- Automated: 28 backend tests (`uv run python -m unittest discover -s tests`) including AWS's published
+  SigV4 presign vector, a 191.6 s cut that the old validator rejected, and an upload → render →
+  download service flow with fake storage and a fake encoder.
+- Browser (Playwright, real UI + real backend): upload of four files, trailer → music video → episode
+  timeline with an 8.9 s song in-point (205 s cut), reload mid-render, completion, preview and
+  download, no console errors. **This used a local S3 stand-in and a simulated encoder, not live Texel
+  or a real bucket.** A live Texel run through the app still needs bucket credentials reachable by Texel.
+- Not implemented: authentication and per-user quotas (single-user dev service), an account-wide cap
+  of two concurrent Texel requests across replicas, multi-track audio mixing.

@@ -23,6 +23,7 @@ import { SceneEditor } from "./components/SceneEditor";
 import { OutputPanel } from "./components/OutputPanel";
 import { CharactersManager, SetsManager, ShowBibleModal } from "./components/CatalogModals";
 import { ImportPanel } from "./components/ImportPanel";
+import { FootageEditor } from "./components/FootageEditor";
 import { Button, Field, Modal, TextInput } from "./components/ui";
 
 type ModalKind = "newShow" | "sets" | "characters" | "bible" | "import" | "ailab" | null;
@@ -33,6 +34,7 @@ export default function App() {
   const [selectedEpisodeId, setSelectedEpisodeId] = useState<string | null>(null);
   const [selectedSceneId, setSelectedSceneId] = useState<string | null>(null);
   const [modal, setModal] = useState<ModalKind>(null);
+  const [footageMode, setFootageMode] = useState(false);
 
   // --- Live queries -----------------------------------------------------------
   const shows = useLiveQuery(() => db.shows.orderBy("updatedAt").reverse().toArray(), [], [] as ShowMeta[]);
@@ -136,9 +138,12 @@ export default function App() {
         onSelectShow={setSelectedShowId}
         onNewShow={() => setModal("newShow")}
         onOpenShowBible={() => setModal("bible")}
+        onEditFootage={() => setFootageMode(true)}
       />
 
-      {noShows ? (
+      {footageMode ? (
+        <FootageEditor onClose={() => setFootageMode(false)} />
+      ) : noShows ? (
         <WelcomeScreen onNewShow={() => setModal("newShow")} onImport={() => setModal("import")} />
       ) : (
         <div className="flex min-h-0 flex-1 flex-col lg:flex-row">

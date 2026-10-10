@@ -20,12 +20,25 @@ export interface TexelShot extends TexelShotPlan {
   error: string | null;
 }
 
+export interface TexelAsset {
+  id: string;
+  name: string;
+  kind: "video" | "audio";
+  duration: number;
+  has_audio: boolean;
+  width: number;
+  height: number;
+  size: number;
+}
+
 export interface TexelTrailer {
   id: string;
   show_id: string;
   show_title: string;
   status: "draft" | "rendering" | "complete" | "error";
   shots: TexelShot[];
+  assets?: TexelAsset[];
+  mode?: "edit";
   video_url: string | null;
   animated?: boolean;
   cloud_render?: { client_id: string; job_id: string | null; status: "running" | "interrupted" | "error" | "complete"; progress: number; error: string | null } | null;
@@ -43,6 +56,8 @@ export interface TexelCapabilities {
   cloud_render_available: boolean;
   ffmpeg_available: boolean;
   audio_available: boolean;
+  storage_configured?: boolean;
+  max_edit_clips?: number;
 }
 
 /** A representative still from each chosen scene, with registered cast/set

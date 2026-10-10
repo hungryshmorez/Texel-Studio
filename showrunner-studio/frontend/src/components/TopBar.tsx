@@ -1,6 +1,6 @@
 // TopBar.tsx — App header: show selector, new show, project JSON export/import.
 import { useRef, useState, type ChangeEvent } from "react";
-import { Clapperboard, Download, Plus, Upload } from "lucide-react";
+import { Clapperboard, Download, Film, Plus, Upload } from "lucide-react";
 import type { ShowMeta } from "../types";
 import { exportProjectSnapshot, importProjectSnapshot, type ProjectSnapshot } from "../lib/db";
 import { Button, Chip, Modal, Select } from "./ui";
@@ -11,6 +11,7 @@ interface TopBarProps {
   onSelectShow: (id: string) => void;
   onNewShow: () => void;
   onOpenShowBible: () => void;
+  onEditFootage: () => void;
 }
 
 function downloadSnapshot(snapshot: ProjectSnapshot) {
@@ -24,7 +25,7 @@ function downloadSnapshot(snapshot: ProjectSnapshot) {
   URL.revokeObjectURL(url);
 }
 
-export function TopBar({ shows, show, onSelectShow, onNewShow, onOpenShowBible }: TopBarProps) {
+export function TopBar({ shows, show, onSelectShow, onNewShow, onOpenShowBible, onEditFootage }: TopBarProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [pendingImport, setPendingImport] = useState<ProjectSnapshot | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
@@ -109,6 +110,10 @@ export function TopBar({ shows, show, onSelectShow, onNewShow, onOpenShowBible }
         >
           Old version
         </a>
+        <Button onClick={onEditFootage} aria-label="Edit footage">
+          <Film size={13} />
+          <span className="hidden sm:inline">Edit footage</span>
+        </Button>
         <Button variant="primary" onClick={onNewShow} aria-label="New show">
           <Plus size={13} strokeWidth={2.5} />
           <span className="hidden sm:inline">New Show</span>
