@@ -1,10 +1,9 @@
 {
   "name": "Texel Studio",
-  "build": { "dockerfile": "Dockerfile" },
+  "image": "mcr.microsoft.com/devcontainers/universal:2",
   "features": {
     "ghcr.io/devcontainers/features/node:1": { "version": "24" }
   },
-  "remoteUser": "vscode",
   "forwardPorts": [3001],
   "portsAttributes": {
     "3001": { "label": "Texel Studio", "onAutoForward": "openBrowser" }

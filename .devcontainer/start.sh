@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+export PATH="$HOME/.local/bin:$PATH"
 studio_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 studio_runtime="$studio_root/.devcontainer/.runtime"
 mkdir -p "$studio_runtime"
