@@ -104,5 +104,6 @@ and its player URLs are an undocumented implementation detail.
   timeline with an 8.9 s song in-point (205 s cut), reload mid-render, completion, preview and
   download, no console errors. **This used a local S3 stand-in and a simulated encoder, not live Texel
   or a real bucket.** A live Texel run through the app still needs bucket credentials reachable by Texel.
+- Browser (Playwright): the "I already host my files" panel, with two HTTPS URL clips and a song at 8.9 s, rendered a 135 s cut through the real backend; same caveat — a local HTTPS stand-in and a simulated encoder, not live Texel.
 - Not implemented: authentication and per-user quotas (single-user dev service), an account-wide cap
   of two concurrent Texel requests across replicas, multi-track audio mixing.
