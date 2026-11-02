@@ -52,7 +52,7 @@ export function SceneMeta({ scene, set, patch, onOpenHistory }: SceneMetaProps) 
           <TextInput value={scene.summary ?? ""} onChange={(e) => patch({ summary: e.target.value })} placeholder="One line for the beat board" aria-label="Scene summary" />
         </Field>
       </div>
-      {scene.status === "locked" && <p className="text-[11px] text-amber-300/80">Locked: AI tools will not rewrite this scene's text.</p>}
+      {scene.status === "locked" && <p className="text-[11px] text-amber-300/80">Locked: AI tools will not overwrite this scene. Unlock it to apply an AI draft or shot list.</p>}
     </section>
   );
 }

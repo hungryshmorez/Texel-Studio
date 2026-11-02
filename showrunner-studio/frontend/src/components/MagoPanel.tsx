@@ -2,12 +2,14 @@
 import { useMemo, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import clsx from "clsx";
-import { AlertTriangle, CircleAlert, FileText, Info, Package } from "lucide-react";
+import { AlertTriangle, CircleAlert, FileText, Info, Package, Sparkles } from "lucide-react";
 import type { CharacterEntity, EpisodeEntity, ImageAsset, SceneEntity, SetEntity, ShotEntity, ShowMeta } from "../types";
 import { db } from "../lib/db";
 import { checkProject, countBySeverity, type Issue, type Severity } from "../lib/consistency";
 import { buildBridge, packageFileName, zipPackage } from "../lib/magoExport";
 import { downloadBlob } from "../lib/download";
+import { runAiJob } from "../lib/aiJobs";
+import { continuityRequest, type ContinuityNote } from "../lib/aiWriting";
 import { Button, Chip, CopyButton, Select } from "./ui";
 
 const ICONS: Record<Severity, typeof Info> = { error: CircleAlert, warn: AlertTriangle, info: Info };
@@ -24,6 +26,9 @@ interface MagoPanelProps {
 export function MagoPanel({ show, episode, sets, characters, onOpenScene }: MagoPanelProps) {
   const [scope, setScope] = useState<"show" | "episode">("show");
   const [showAll, setShowAll] = useState(false);
+  const [notes, setNotes] = useState<ContinuityNote[] | null>(null);
+  const [aiBusy, setAiBusy] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
   const data = useLiveQuery(async () => {
     if (!show) return null;
     const episodes = await db.episodes.where("showId").equals(show.id).toArray();
@@ -45,6 +50,21 @@ export function MagoPanel({ show, episode, sets, characters, onOpenScene }: Mago
 
   const title = effectiveScope === "episode" && episode ? `${show.title} ${episode.title}` : show.title;
   const visible = showAll ? issues : issues.slice(0, 6);
+  const scopedScenes = effectiveScope === "episode" && episode ? data.scenes.filter((s) => s.episodeId === episode.id) : data.scenes;
+  const hasWritten = scopedScenes.some((s) => s.action.trim() || s.dialogue.some((d) => d.text.trim()));
+  const runContinuity = async () => {
+    setAiBusy(true);
+    setAiError(null);
+    try {
+      const scenes = [...scopedScenes].sort((a, b) => a.order - b.order);
+      setNotes(await runAiJob<ContinuityNote[]>("/api/continuity/start", continuityRequest(show, scenes, sets, characters)));
+    } catch (cause) {
+      const text = (cause as Error).message;
+      setAiError(/not configured/i.test(text) ? "AI writing is not set up. Add PROJEC_GOOGLE_API_KEY to the server's .env and restart it." : text);
+    } finally {
+      setAiBusy(false);
+    }
+  };
   const director = pkg.files.find((f) => f.path === "director-script.txt")?.text ?? "";
   const fountain = pkg.files.find((f) => f.path === "script.fountain")?.text ?? "";
   const hasScenes = data.scenes.length > 0;
@@ -75,10 +95,34 @@ export function MagoPanel({ show, episode, sets, characters, onOpenScene }: Mago
         {issues.length > 6 && <Button size="xs" variant="subtle" onClick={() => setShowAll(!showAll)}>{showAll ? "Show fewer" : `Show all ${issues.length}`}</Button>}
       </section>
 
+      <section className="space-y-2" aria-label="AI continuity check">
+        <div className="flex items-center justify-between gap-2">
+          <h3 className="text-[12px] font-semibold text-neutral-200">AI continuity check</h3>
+          <Button size="sm" onClick={() => void runContinuity()} disabled={aiBusy || !hasWritten} aria-label="Run AI continuity check"><Sparkles size={12} /> {aiBusy ? "Checking…" : "Check with AI"}</Button>
+        </div>
+        <p className="text-[11px] leading-snug text-neutral-500">Reads the {effectiveScope === "episode" ? "episode" : "whole show"} against your bible and reports contradictions: looks, wardrobe, locations, things that appear or vanish. It does not judge quality.</p>
+        {aiError && <p role="alert" className="text-[11.5px] text-red-300">{aiError}</p>}
+        {notes && (notes.length === 0 ? <p role="status" className="text-[12px] text-emerald-300/80">No contradictions found.</p> : (
+          <ul className="space-y-1" aria-label="AI continuity notes">
+            {notes.map((note, index) => {
+              const Icon = ICONS[note.severity];
+              const target = scopedScenes.find((s) => s.sceneName === note.scene);
+              return (
+                <li key={index} className="flex items-start gap-1.5 text-[11.5px] leading-snug">
+                  <Icon size={12} className={clsx("mt-0.5 shrink-0", TONES[note.severity])} aria-label={note.severity} />
+                  <span className="text-neutral-300">{note.scene ? <strong className="font-medium text-neutral-200">{note.scene}: </strong> : null}{note.message}</span>
+                  {target && <button type="button" onClick={() => onOpenScene(target.episodeId, target.id)} className="ml-auto shrink-0 cursor-pointer text-amber-400 hover:underline">Open</button>}
+                </li>
+              );
+            })}
+          </ul>
+        ))}
+      </section>
+
       <section className="space-y-2" aria-label="Export to Mago Studio">
         <h3 className="text-[12px] font-semibold text-neutral-200">Send to Mago Studio</h3>
         <p className="text-[11px] leading-snug text-neutral-500">Mago has no script importer, so this makes a package you paste into Mago Director: the script with style, cast and environments, the shot table for each scene, storyboard prompts, and reference images.</p>
-        <Select value={effectiveScope} onChange={(e) => setScope(e.target.value as "show" | "episode")} aria-label="What to export">
+        <Select value={effectiveScope} onChange={(e) => { setScope(e.target.value as "show" | "episode"); setNotes(null); setAiError(null); }} aria-label="What to export">
           <option value="show">Whole show</option>
           {episode && <option value="episode">This episode: {episode.title}</option>}
         </Select>

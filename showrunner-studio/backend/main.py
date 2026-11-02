@@ -13,6 +13,7 @@ import time
 import uuid
 from typing import Optional
 
+import ai_writing
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -691,6 +692,51 @@ async def ai_job_status(job_id: str):
     if job is None:
         raise HTTPException(status_code=404, detail="Unknown job id.")
     return job
+
+
+def _start_parsed_job(prompt_builder, parser):
+    """Like _start_ai_job, but the reply must be JSON that `parser` validates. The result is {"data": ...}."""
+    job_id = uuid.uuid4().hex
+    _ai_jobs[job_id] = {"status": "pending", "result": None, "error": None, "created": time.time()}
+
+    def run_job():
+        try:
+            client = get_client()
+            response = generate_with_retry(
+                client, model="gemini-3.8-flash", contents=prompt_builder(), config={"max_output_tokens": 16384}
+            )
+            _ai_jobs[job_id] = {"status": "done", "result": {"data": parser(response.text or "")}, "error": None}
+        except ai_writing.AiOutputError as e:
+            _ai_jobs[job_id] = {"status": "error", "result": None, "error": str(e)}
+        except HTTPException as e:
+            _ai_jobs[job_id] = {"status": "error", "result": None, "error": str(e.detail)}
+        except Exception as e:
+            _ai_jobs[job_id] = {"status": "error", "result": None, "error": f"Unexpected error: {e}"}
+
+    threading.Thread(target=run_job, daemon=True).start()
+    return {"job_id": job_id}
+
+
+@app.post("/api/shots/generate/start")
+async def shot_list_start(req: ai_writing.ShotListRequest):
+    if not req.scene.action.strip() and not req.scene.dialogue:
+        raise HTTPException(status_code=400, detail="Write some action or dialogue first. There is nothing to break into shots.")
+    names = [c.name for c in req.characters]
+    return _start_parsed_job(lambda: ai_writing.build_shot_list_prompt(req), lambda text: ai_writing.parse_shot_list(text, names))
+
+
+@app.post("/api/shots/prompts/start")
+async def shot_prompts_start(req: ai_writing.ShotPromptsRequest):
+    numbers = [s.number for s in req.shots]
+    return _start_parsed_job(lambda: ai_writing.build_shot_prompts_prompt(req), lambda text: ai_writing.parse_shot_prompts(text, numbers))
+
+
+@app.post("/api/continuity/start")
+async def continuity_start(req: ai_writing.ContinuityRequest):
+    if not any(s.action.strip() or s.dialogue for s in req.scenes):
+        raise HTTPException(status_code=400, detail="There is no written scene to check yet.")
+    names = [s.name for s in req.scenes]
+    return _start_parsed_job(lambda: ai_writing.build_continuity_prompt(req), lambda text: ai_writing.parse_continuity(text, names))
 
 
 @app.post("/api/critique/start")

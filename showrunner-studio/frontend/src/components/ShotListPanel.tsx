@@ -2,21 +2,33 @@
 // Mago Studio will turn into a storyboard and video. The words are written here.
 import { useLiveQuery } from "dexie-react-hooks";
 import clsx from "clsx";
-import { ArrowDown, ArrowUp, Copy, Download, Plus, Trash } from "lucide-react";
-import type { CharacterEntity, SceneEntity, ShotEntity } from "../types";
-import { listShots, createShot, deleteShot, moveShot, updateShot } from "../lib/writingActions";
+import { useRef, useState } from "react";
+import { ArrowDown, ArrowUp, Copy, Download, Plus, Sparkles, Trash, Undo2, X } from "lucide-react";
+import type { CharacterEntity, SceneEntity, SetEntity, ShotEntity, ShowMeta } from "../types";
+import { listShots, createShot, deleteShot, moveShot, replaceShots, updateShot, type ShotDraft } from "../lib/writingActions";
+import { runAiJob } from "../lib/aiJobs";
+import { hasMissingPrompts, promptPatches, shotDraftsFromAi, shotListRequest, shotPromptsRequest, type AiPrompt, type AiShot } from "../lib/aiWriting";
 import { FRAMING_OPTIONS, MOVEMENT_OPTIONS, formatShotLines, shotsToCsv, totalDuration } from "../lib/shotlist";
 import { downloadBlob } from "../lib/download";
 import { Button, Chip, CopyButton, Field, TextArea, TextInput } from "./ui";
 import { useConfirm } from "./ConfirmDialog";
 
 interface ShotListPanelProps {
+  show: ShowMeta | null;
   scene: SceneEntity | null;
+  set: SetEntity | undefined;
   characters: CharacterEntity[];
 }
 
-export function ShotListPanel({ scene, characters }: ShotListPanelProps) {
+/** The backend says this when no Gemini key is configured. Say what to do instead. */
+const friendly = (message: string) => (/not configured/i.test(message) ? "AI writing is not set up. Add PROJEC_GOOGLE_API_KEY to the server's .env and restart it." : message);
+
+export function ShotListPanel({ show, scene, set, characters }: ShotListPanelProps) {
   const confirm = useConfirm();
+  const [busy, setBusy] = useState<"list" | "prompts" | null>(null);
+  const [message, setMessage] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
+  const [undo, setUndo] = useState<{ sceneId: string; drafts: ShotDraft[] } | null>(null);
+  const abort = useRef<AbortController | null>(null);
   const shots = useLiveQuery(() => (scene ? listShots(scene.id) : Promise.resolve([] as ShotEntity[])), [scene?.id], [] as ShotEntity[]);
   const list = shots ?? [];
   if (!scene) return <p className="text-xs text-neutral-500">Select a scene to write its shot list.</p>;
@@ -26,6 +38,45 @@ export function ShotListPanel({ scene, characters }: ShotListPanelProps) {
   const total = totalDuration(list);
   const toggleCast = (shot: ShotEntity, id: string) => void updateShot(shot.id, { castIds: shot.castIds.includes(id) ? shot.castIds.filter((c) => c !== id) : [...shot.castIds, id] });
   const addShot = () => void createShot(scene.id, { castIds: scene.activeCharacterIds });
+  const locked = scene.status === "locked";
+  const toDraft = ({ id: _id, sceneId: _s, order: _o, createdAt: _c, updatedAt: _u, ...rest }: ShotEntity): ShotDraft => { void [_id, _s, _o, _c, _u]; return rest; };
+
+  const writeShotList = async () => {
+    if (!show || locked) return;
+    if (list.length > 0 && !(await confirm({ message: `Replace the ${list.length} existing ${list.length === 1 ? "shot" : "shots"} with a new AI shot list? You can undo this right after.`, confirmLabel: "Replace shots" }))) return;
+    setMessage(null);
+    setBusy("list");
+    abort.current = new AbortController();
+    try {
+      const shots = await runAiJob<AiShot[]>("/api/shots/generate/start", shotListRequest(show, scene, set, characters), { signal: abort.current.signal });
+      const previous = list.map(toDraft);
+      await replaceShots(scene.id, shotDraftsFromAi(shots, characters));
+      setUndo(list.length ? { sceneId: scene.id, drafts: previous } : null);
+      setMessage({ tone: "ok", text: `Wrote ${shots.length} ${shots.length === 1 ? "shot" : "shots"}. Check the words before you send them to Mago.` });
+    } catch (cause) {
+      if ((cause as Error).name !== "AbortError") setMessage({ tone: "error", text: friendly((cause as Error).message) });
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const fillPrompts = async () => {
+    if (!show) return;
+    setMessage(null);
+    setBusy("prompts");
+    abort.current = new AbortController();
+    try {
+      const prompts = await runAiJob<AiPrompt[]>("/api/shots/prompts/start", shotPromptsRequest(show, scene, set, characters, list), { signal: abort.current.signal });
+      const patches = promptPatches(list, prompts);
+      await Promise.all(patches.map(({ id, patch }) => updateShot(id, patch)));
+      setMessage({ tone: "ok", text: patches.length ? `Filled the missing prompts on ${patches.length} ${patches.length === 1 ? "shot" : "shots"}. Prompts you wrote were left alone.` : "Nothing to fill: every shot already has its prompts." });
+    } catch (cause) {
+      if ((cause as Error).name !== "AbortError") setMessage({ tone: "error", text: friendly((cause as Error).message) });
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const duplicate = async (shot: ShotEntity) => {
     const { id: _id, sceneId: _s, order: _o, createdAt: _c, updatedAt: _u, ...rest } = shot;
     void _id; void _s; void _o; void _c; void _u;
@@ -46,6 +97,23 @@ export function ShotListPanel({ scene, characters }: ShotListPanelProps) {
         </div>
       </div>
       <p className="text-[11px] leading-snug text-neutral-500">Write the camera, the picture and the words here. Mago Studio draws the storyboard and renders the video from them.</p>
+
+      <div className="space-y-1.5 rounded-lg border border-neutral-800 bg-neutral-900/40 p-2" aria-label="AI writing">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <Button size="sm" onClick={() => void writeShotList()} disabled={!show || locked || busy !== null || (!scene.action.trim() && scene.dialogue.length === 0)} aria-label="Write shot list with AI"><Sparkles size={12} /> {busy === "list" ? "Writing…" : "Write shot list with AI"}</Button>
+          <Button size="sm" onClick={() => void fillPrompts()} disabled={!show || busy !== null || !hasMissingPrompts(list)} aria-label="Fill missing prompts with AI"><Sparkles size={12} /> {busy === "prompts" ? "Writing…" : "Fill missing prompts"}</Button>
+          {busy && <Button size="sm" variant="subtle" onClick={() => abort.current?.abort()} aria-label="Cancel AI request"><X size={12} /> Cancel</Button>}
+        </div>
+        <p className="text-[11px] leading-snug text-neutral-500">{locked ? "This scene is locked, so AI will not rewrite its shots." : "AI copies your dialogue word for word and never writes the visual style. It only fills prompts that are empty."}</p>
+        {message && (
+          <p role={message.tone === "error" ? "alert" : "status"} className={message.tone === "error" ? "text-[11.5px] text-red-300" : "text-[11.5px] text-emerald-300/90"}>
+            {message.text}
+            {message.tone === "ok" && undo?.sceneId === scene.id && (
+              <button type="button" onClick={async () => { await replaceShots(scene.id, undo.drafts); setUndo(null); setMessage({ tone: "ok", text: "Restored your previous shots." }); }} className="ml-2 inline-flex cursor-pointer items-center gap-1 text-amber-300 hover:underline"><Undo2 size={11} /> Undo</button>
+            )}
+          </p>
+        )}
+      </div>
 
       {list.length === 0 && <p className="rounded-md border border-dashed border-neutral-800 px-3 py-5 text-center text-[12px] text-neutral-600">No shots yet. Add one, or break the action into shots.</p>}
 

@@ -64,7 +64,7 @@ export function OutputPanel({ show, episode, scene, set, sets, characters, onSce
 
       <div className="min-h-0 flex-1 overflow-y-auto p-3">
         <div role="tabpanel" aria-label="Shot list" hidden={tab !== "shots"}>
-          <ShotListPanel scene={scene} characters={characters} />
+          <ShotListPanel show={show} scene={scene} set={set} characters={characters} />
         </div>
         <div role="tabpanel" aria-label="Mago Studio export" hidden={tab !== "mago"}>
           <MagoPanel show={show} episode={episode} sets={sets} characters={characters} onOpenScene={onOpenScene} />

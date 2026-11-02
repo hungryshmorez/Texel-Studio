@@ -5,6 +5,7 @@ import { CircleAlert, Sparkles, WandSparkles } from "lucide-react";
 import clsx from "clsx";
 import type { CharacterEntity, EpisodeEntity, SceneEntity, SetEntity, ShowMeta } from "../types";
 import { createScene, updateScene } from "../lib/actions";
+import { saveRevision } from "../lib/writingActions";
 import { uid } from "../lib/db";
 import { Button, Chip, Field, Label, Select, Spinner, TextArea } from "./ui";
 
@@ -123,6 +124,9 @@ export function AiScenePanel({ show, episode, scene, sets, characters, onApplied
       activeCharacterIds: chosenCharIds,
     };
     if (scene) {
+      if (scene.status === "locked") return; // the button is disabled too; never overwrite a locked scene
+      // Keep the writer's text so an AI draft can always be undone from the scene history.
+      await saveRevision(scene.id, "Before AI scene", true);
       await updateScene(scene.id, patch);
       onApplied(scene.id);
     } else if (episode) {
@@ -213,10 +217,10 @@ export function AiScenePanel({ show, episode, scene, sets, characters, onApplied
           size="md"
           className="w-full"
           onClick={apply}
-          disabled={!scene && !episode}
-          title={!scene && !episode ? "Select or create an episode first" : undefined}
+          disabled={(!scene && !episode) || scene?.status === "locked"}
+          title={scene?.status === "locked" ? "This scene is locked. Unlock it to apply an AI draft." : !scene && !episode ? "Select or create an episode first" : undefined}
         >
-          Apply to {scene ? "current scene" : "new scene"}
+          {scene?.status === "locked" ? "Scene is locked" : `Apply to ${scene ? "current scene" : "new scene"}`}
         </Button>
       )}
     </div>
