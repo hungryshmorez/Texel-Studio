@@ -124,6 +124,17 @@ describe("Mago bridge package", () => {
     assert.equal(strFromU8(entries["script.fountain"]), pkg.files.find((f) => f.path === "script.fountain")!.text);
   });
 
+  it("leaves out scenes that have nothing written and says so", () => {
+    const idea = { ...scene1, id: "idea1", sceneName: "Just an idea", order: 3, action: "  ", dialogue: [], status: "idea" as const };
+    const pkg = buildBridge({ ...input, scenes: [scene1, idea] });
+    const director = pkg.files.find((f) => f.path === "director-script.txt")!.text!;
+    assert.doesNotMatch(director, /JUST AN IDEA/i);
+    assert.doesNotMatch(pkg.files.find((f) => f.path === "script.fountain")!.text!, /JUST AN IDEA/i);
+    assert.ok(pkg.warnings.includes("1 scene has no action or dialogue yet and was left out."));
+    const json = JSON.parse(pkg.files.find((f) => f.path === "showwriter-project.json")!.text!);
+    assert.equal(json.episodes[0].scenes.length, 1);
+  });
+
   it("copes with an empty project and unreadable images without throwing", () => {
     const empty = buildBridge({ ...input, scenes: [], shots: [] });
     assert.ok(empty.warnings.includes("There are no scenes to export."));

@@ -67,6 +67,15 @@ describe("checkProject", () => {
     assert.equal(countBySeverity(issues).error, 0);
   });
 
+  it("does not ask an idea-stage scene for a set yet", () => {
+    const idea = { ...scene2, status: "idea" as const, action: "", dialogue: [] };
+    const ideaCodes = codes(checkProject({ ...base, scenes: [idea], shots: [] }));
+    assert.ok(!ideaCodes.includes("scene-no-set"));
+    assert.ok(!ideaCodes.includes("scene-missing-set"), "no set at all is not the same as a deleted set");
+    assert.deepEqual(ideaCodes.filter((c) => c.startsWith("scene-") || c === "speaker-not-in-cast"), []);
+    assert.ok(codes(checkProject({ ...base, scenes: [{ ...idea, status: "draft" as const }], shots: [] })).includes("scene-no-set"));
+  });
+
   it("does not nag about an empty scene that is still just an idea", () => {
     const idea = { ...scene1, status: "idea" as const, action: "", dialogue: [] };
     assert.ok(!codes(checkProject({ ...base, scenes: [idea], shots: [] })).includes("scene-empty"));

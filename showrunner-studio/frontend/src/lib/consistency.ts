@@ -70,8 +70,12 @@ export function checkProject(input: CheckInput): Issue[] {
   for (const scene of scenes) {
     const where = `${episodeTitle(scene.episodeId)} · ${scene.sceneName}`;
     const base = { sceneId: scene.id, episodeId: scene.episodeId };
-    if (!scene.targetSetId) add({ ...base, severity: "warn", code: "scene-no-set", message: `${where}: no set chosen, so the heading has no location.` });
-    else if (!sets.some((s) => s.id === scene.targetSetId)) add({ ...base, severity: "error", code: "scene-missing-set", message: `${where}: its set no longer exists.` });
+    if (!scene.targetSetId) {
+      // An idea does not need a location yet.
+      if (scene.status !== "idea") add({ ...base, severity: "warn", code: "scene-no-set", message: `${where}: no set chosen, so the heading has no location.` });
+    } else if (!sets.some((s) => s.id === scene.targetSetId)) {
+      add({ ...base, severity: "error", code: "scene-missing-set", message: `${where}: its set no longer exists.` });
+    }
     if (scene.status !== "idea" && !scene.action.trim() && scene.dialogue.length === 0) add({ ...base, severity: "info", code: "scene-empty", message: `${where}: nothing written yet.` });
 
     const cast = new Set(scene.activeCharacterIds);

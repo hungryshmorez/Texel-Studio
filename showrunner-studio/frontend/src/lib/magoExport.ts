@@ -106,13 +106,18 @@ export function buildBridge(input: BridgeInput): BridgePackage {
   const warnings: string[] = [];
   const episodes = [...input.episodes].filter((e) => !input.episodeId || e.id === input.episodeId).sort((a, b) => a.order - b.order);
   const episodeIds = new Set(episodes.map((e) => e.id));
-  const scenes = input.scenes.filter((s) => episodeIds.has(s.episodeId));
+  const inScope = input.scenes.filter((s) => episodeIds.has(s.episodeId));
+  // A scene with no action and no dialogue (a beat-board idea) would export as a bare heading, so leave it out.
+  const hasWriting = (s: SceneEntity) => s.action.trim() !== "" || s.dialogue.some((d) => d.text.trim() !== "");
+  const scenes = inScope.filter(hasWriting);
   const orderedScenes = episodes.flatMap((e) => scenes.filter((s) => s.episodeId === e.id).sort((a, b) => a.order - b.order));
   const setOf = (scene: SceneEntity) => sets.find((s) => s.id === scene.targetSetId);
   const castNames = (ids: string[]) => ids.map((id) => characters.find((c) => c.id === id)?.name).filter((n): n is string => !!n);
   const shotsOf = (scene: SceneEntity) => sortShots(input.shots.filter((s) => s.sceneId === scene.id));
 
   if (orderedScenes.length === 0) warnings.push("There are no scenes to export.");
+  const skipped = inScope.length - scenes.length;
+  if (skipped > 0) warnings.push(`${skipped} ${skipped === 1 ? "scene has" : "scenes have"} no action or dialogue yet and ${skipped === 1 ? "was" : "were"} left out.`);
   for (const scene of orderedScenes) {
     if (!scene.targetSetId) warnings.push(`"${scene.sceneName}" has no set, so its heading will be a forced heading.`);
     if (scene.action.trim() && shotsOf(scene).length === 0) warnings.push(`"${scene.sceneName}" has no shot list yet.`);
