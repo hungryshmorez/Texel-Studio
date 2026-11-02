@@ -1,4 +1,4 @@
-// App.tsx — Texel Studio shell: selection state, live Dexie queries,
+// App.tsx — Showwriter Studio shell: selection state, live Dexie queries,
 // three-pane layout (tree · script editor · export rails) and modals.
 import { useEffect, useState, type ReactNode } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
@@ -23,7 +23,6 @@ import { SceneEditor } from "./components/SceneEditor";
 import { OutputPanel } from "./components/OutputPanel";
 import { CharactersManager, SetsManager, ShowBibleModal } from "./components/CatalogModals";
 import { ImportPanel } from "./components/ImportPanel";
-import { FootageEditor } from "./components/FootageEditor";
 import { Button, Field, Modal, TextInput } from "./components/ui";
 
 type ModalKind = "newShow" | "sets" | "characters" | "bible" | "import" | "ailab" | null;
@@ -34,7 +33,6 @@ export default function App() {
   const [selectedEpisodeId, setSelectedEpisodeId] = useState<string | null>(null);
   const [selectedSceneId, setSelectedSceneId] = useState<string | null>(null);
   const [modal, setModal] = useState<ModalKind>(null);
-  const [footageMode, setFootageMode] = useState(false);
 
   // --- Live queries -----------------------------------------------------------
   const shows = useLiveQuery(() => db.shows.orderBy("updatedAt").reverse().toArray(), [], [] as ShowMeta[]);
@@ -138,12 +136,9 @@ export default function App() {
         onSelectShow={setSelectedShowId}
         onNewShow={() => setModal("newShow")}
         onOpenShowBible={() => setModal("bible")}
-        onEditFootage={() => setFootageMode(true)}
       />
 
-      {footageMode ? (
-        <FootageEditor onClose={() => setFootageMode(false)} />
-      ) : noShows ? (
+      {noShows ? (
         <WelcomeScreen onNewShow={() => setModal("newShow")} onImport={() => setModal("import")} />
       ) : (
         <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
@@ -331,12 +326,12 @@ function WelcomeScreen({ onNewShow, onImport }: { onNewShow: () => void; onImpor
     <div className="flex flex-1 items-center justify-center p-6">
       <div className="max-w-md text-center">
         <Clapperboard size={40} className="mx-auto text-amber-400" aria-hidden />
-        <h1 className="mt-4 text-lg font-semibold tracking-tight text-neutral-100">Texel Studio</h1>
+        <h1 className="mt-4 text-lg font-semibold tracking-tight text-neutral-100">Showwriter Studio</h1>
         <p className="mt-2 text-[13px] leading-relaxed text-neutral-500">
           A local-first writers' room: build your show bible, register sets and characters as{" "}
           <span className="font-mono text-amber-300">#tags</span> and{" "}
           <span className="font-mono text-amber-300">@tags</span>, outline scenes, then export AI-video-ready
-          Write scenes, prepare shots, and render with Texel. Scripts stay in this browser; media jobs run on the backend.
+          Write the show, the shots and every prompt here, then hand the package to Mago Studio to generate storyboards and video. Everything stays in this browser.
         </p>
         <Button variant="primary" size="lg" className="mx-auto mt-5" onClick={onNewShow}>
           <Plus size={14} strokeWidth={2.5} /> Create your first show

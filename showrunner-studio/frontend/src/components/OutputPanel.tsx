@@ -3,18 +3,17 @@
 import { useState } from "react";
 import clsx from "clsx";
 import { MonitorPlay, Video, WandSparkles } from "lucide-react";
-import type { CharacterEntity, EpisodeEntity, SceneEntity, SetEntity, ShowMeta } from "../types";import { ShowrunnerPanel } from "./ShowrunnerPanel";
+import type { CharacterEntity, EpisodeEntity, SceneEntity, SetEntity, ShowMeta } from "../types";
+import { ShowrunnerPanel } from "./ShowrunnerPanel";
 import { SeedancePanel } from "./SeedancePanel";
 import { AiScenePanel } from "./AiScenePanel";
-import { TexelPanel } from "./TexelPanel";
 
-type Tab = "showrunner" | "seedance" | "ai" | "texel";
+type Tab = "showrunner" | "seedance" | "ai";
 
 const TABS: { id: Tab; label: string; icon: typeof MonitorPlay }[] = [
   { id: "showrunner", label: "Showrunner", icon: MonitorPlay },
   { id: "seedance", label: "Seedance", icon: Video },
   { id: "ai", label: "AI Scene", icon: WandSparkles },
-  { id: "texel", label: "Texel", icon: Video },
 ];
 
 interface OutputPanelProps {
@@ -59,9 +58,6 @@ export function OutputPanel({ show, episode, scene, set, sets, characters, onSce
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto p-3">
-        <div role="tabpanel" aria-label="Texel trailer generator" hidden={tab !== "texel"}>
-          {tab === "texel" && show ? <TexelPanel key={show.id} show={show} scene={scene} sets={sets} characters={characters} /> : tab === "texel" ? <p className="text-xs text-neutral-500">Select a show to prepare its trailer.</p> : null}
-        </div>
         <div role="tabpanel" aria-label="Showrunner preview" hidden={tab !== "showrunner"}>
           <ShowrunnerPanel scene={scene} set={set} characters={characters} />
         </div>

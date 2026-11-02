@@ -1,8 +1,8 @@
 """Single-origin hosting: password gate + built frontend served by the backend.
 
-The app spends Texel credits and stores media, so a public deployment must not be open.
+The AI endpoints spend your Gemini quota, so a public deployment must not be open.
 Set APP_PASSWORD; browsers then show a login prompt (HTTP Basic, any username) and
-same-origin fetches reuse it. TEXEL_REQUIRE_PASSWORD=1 refuses to start without one.
+same-origin fetches reuse it. REQUIRE_PASSWORD=1 refuses to start without one.
 """
 import base64
 import hmac
@@ -19,8 +19,8 @@ OPEN_PATHS = {"/api/health"}  # platform health checks
 
 def install(app: FastAPI) -> None:
     password = os.environ.get("APP_PASSWORD", "")
-    if not password and os.environ.get("TEXEL_REQUIRE_PASSWORD") == "1":
-        raise RuntimeError("Set APP_PASSWORD before exposing Texel Studio publicly.")
+    if not password and os.environ.get("REQUIRE_PASSWORD") == "1":
+        raise RuntimeError("Set APP_PASSWORD before exposing Showwriter Studio publicly.")
     if password:
         @app.middleware("http")
         async def gate(request, call_next):
@@ -35,7 +35,7 @@ def install(app: FastAPI) -> None:
                     supplied = ""
             if hmac.compare_digest(supplied.encode(), password.encode()):
                 return await call_next(request)
-            return PlainTextResponse("Password required.", status_code=401, headers={"WWW-Authenticate": 'Basic realm="Texel Studio"'})
+            return PlainTextResponse("Password required.", status_code=401, headers={"WWW-Authenticate": 'Basic realm="Showwriter Studio"'})
     if DIST.is_dir():
         # Registered last so every /api route keeps priority.
         app.mount("/", StaticFiles(directory=str(DIST), html=True), name="frontend")

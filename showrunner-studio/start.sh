@@ -1,5 +1,5 @@
 #!/bin/bash
-# Start Texel Studio: FastAPI backend + Vite/React frontend.
+# Start Showwriter Studio: FastAPI backend + Vite/React frontend.
 set -e
 
 cd "$(dirname "$0")"

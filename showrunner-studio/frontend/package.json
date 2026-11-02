@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
-    "test:texel": "node --import tsx --test tests/texelExport.test.ts",
+    "test": "node --import tsx --test tests/*.test.ts",
     "preview": "vite preview"
   },
   "dependencies": {
