@@ -7,6 +7,8 @@ export interface ShowMeta {
   title: string;
   genre: string;
   premise: string; // world rules, lore, visual style, glitch/broadcast aesthetics
+  logline?: string; // one-sentence pitch
+  visualStyle?: string; // shared look handed to the video tool (mirrors Mago's "visual style")
   createdAt: number;
   updatedAt: number;
 }
@@ -17,6 +19,8 @@ export interface SetEntity {
   name: string; // exact name used for #TagName calls
   timeOfDay: string; // "Interior" | "Exterior" | "Night" | "Liminal" | free text
   description: string; // physical traits, props, textures, ambient audio
+  lookNotes?: string; // lighting, palette, lens feel
+  referenceImageIds?: string[]; // ImageAsset ids
   createdAt: number;
   updatedAt: number;
 }
@@ -30,6 +34,9 @@ export interface CharacterEntity {
   gender: string;
   visualDescription: string; // physical form, material, clothing, visual quirks
   voiceDescription: string; // timbre, dialect, cadence, audio processing/distortion traits
+  wardrobe?: string; // what they wear, per default look
+  distinctiveFeatures?: string; // comma-separated recognisable traits (scars, glasses, gait)
+  referenceImageIds?: string[]; // ImageAsset ids
   createdAt: number;
   updatedAt: number;
 }
@@ -41,6 +48,9 @@ export interface DialogueLine {
   parenthetical?: string;
 }
 
+export type SceneStatus = "idea" | "draft" | "revised" | "locked";
+export type IntExt = "INT" | "EXT" | "INT/EXT";
+
 export interface SceneEntity {
   id: string;
   episodeId: string;
@@ -51,8 +61,75 @@ export interface SceneEntity {
   action: string; // cinematic verbs, stage movement, camera instructions
   dialogue: DialogueLine[];
   sceneNotes: string;
+  status?: SceneStatus; // writing progress; "locked" scenes are protected from AI rewrites
+  intExt?: IntExt; // screenplay heading parts
+  timeOfDayTag?: string; // "DAY", "NIGHT", "DAWN"...
+  summary?: string; // one-line card text on the beat board
   createdAt: number;
   updatedAt: number;
+}
+
+/** One slot on an episode's beat board; may be linked to the scene that delivers it. */
+export interface BeatEntity {
+  id: string;
+  episodeId: string;
+  order: number;
+  label: string; // template slot, e.g. "Catalyst"
+  text: string;
+  sceneId: string | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
+/** A saved copy of a scene's writing, for history and restore. */
+export interface SceneSnapshot {
+  sceneName: string;
+  action: string;
+  dialogue: DialogueLine[];
+  sceneNotes: string;
+  targetSetId: string | null;
+  activeCharacterIds: string[];
+  status?: SceneStatus;
+  intExt?: IntExt;
+  timeOfDayTag?: string;
+  summary?: string;
+}
+
+export interface RevisionEntity {
+  id: string;
+  sceneId: string;
+  label: string;
+  auto: boolean; // true for the safety copy taken before a restore
+  createdAt: number;
+  snapshot: SceneSnapshot;
+}
+
+/** One row of a scene's shot table. Written here, rendered in Mago Studio. */
+export interface ShotEntity {
+  id: string;
+  sceneId: string;
+  order: number;
+  durationSeconds: number;
+  framing: string; // "Wide", "Medium close-up"...
+  movement: string; // "Static", "Slow push-in"...
+  description: string; // what the camera sees
+  dialogue: string; // spoken text in this shot, if any
+  castIds: string[];
+  storyboardPrompt: string; // words for the storyboard sketch
+  videoPrompt: string; // words for the video generator
+  notes: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+/** A reference image, stored as a (downscaled) data URL so projects stay portable JSON. */
+export interface ImageAsset {
+  id: string;
+  showId: string;
+  name: string;
+  mime: string;
+  dataUrl: string;
+  createdAt: number;
 }
 
 export interface EpisodeEntity {
