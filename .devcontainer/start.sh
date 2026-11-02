@@ -10,5 +10,5 @@ mkdir -p "$studio_runtime"
 nohup flock --nonblock "$studio_runtime/launch.lock" \
   bash "$studio_root/start.sh" \
   </dev/null >>"$studio_runtime/studio.log" 2>&1 &
-printf 'Texel Studio is starting. Open port 3001 in the Ports tab.\n'
+printf 'Showwriter Studio is starting. Open port 3001 in the Ports tab.\n'
 printf 'Startup log: %s/studio.log\n' "$studio_runtime"

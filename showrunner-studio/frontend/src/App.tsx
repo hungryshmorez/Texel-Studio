@@ -1,8 +1,8 @@
-// App.tsx — Texel Studio shell: selection state, live Dexie queries,
+// App.tsx — Showwriter Studio shell: selection state, live Dexie queries,
 // three-pane layout (tree · script editor · export rails) and modals.
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
-import { Clapperboard, Plus } from "lucide-react";
+import { Clapperboard, LayoutList, PenLine, Plus } from "lucide-react";
 import { db } from "./lib/db";
 import {
   createEpisode,
@@ -23,7 +23,7 @@ import { SceneEditor } from "./components/SceneEditor";
 import { OutputPanel } from "./components/OutputPanel";
 import { CharactersManager, SetsManager, ShowBibleModal } from "./components/CatalogModals";
 import { ImportPanel } from "./components/ImportPanel";
-import { FootageEditor } from "./components/FootageEditor";
+import { BeatBoard } from "./components/BeatBoard";
 import { Button, Field, Modal, TextInput } from "./components/ui";
 
 type ModalKind = "newShow" | "sets" | "characters" | "bible" | "import" | "ailab" | null;
@@ -34,7 +34,9 @@ export default function App() {
   const [selectedEpisodeId, setSelectedEpisodeId] = useState<string | null>(null);
   const [selectedSceneId, setSelectedSceneId] = useState<string | null>(null);
   const [modal, setModal] = useState<ModalKind>(null);
-  const [footageMode, setFootageMode] = useState(false);
+  const [view, setView] = useState<"scene" | "beats">("scene");
+  // A scene to select once its episode's scenes have loaded (used when jumping across episodes).
+  const pendingScene = useRef<{ episodeId: string; sceneId: string } | null>(null);
 
   // --- Live queries -----------------------------------------------------------
   const shows = useLiveQuery(() => db.shows.orderBy("updatedAt").reverse().toArray(), [], [] as ShowMeta[]);
@@ -110,6 +112,15 @@ export default function App() {
       if (selectedSceneId !== null) setSelectedSceneId(null);
       return;
     }
+    const pending = pendingScene.current;
+    if (pending) {
+      if (pending.episodeId !== selectedEpisodeId) pendingScene.current = null;
+      else if (sceneList.some((s) => s.id === pending.sceneId)) {
+        pendingScene.current = null;
+        if (selectedSceneId !== pending.sceneId) setSelectedSceneId(pending.sceneId);
+        return;
+      } else return; // its scenes have not loaded yet
+    }
     if (!sceneList.some((s) => s.id === selectedSceneId)) {
       setSelectedSceneId(sceneList[0]?.id ?? null);
     }
@@ -130,6 +141,13 @@ export default function App() {
 
   const noShows = showList.length === 0;
 
+  const openScene = (episodeId: string, sceneId: string) => {
+    pendingScene.current = { episodeId, sceneId };
+    setSelectedEpisodeId(episodeId);
+    setSelectedSceneId(sceneId);
+    setView("scene");
+  };
+
   return (
     <div className="flex h-dvh flex-col overflow-hidden bg-neutral-950 text-neutral-200">
       <TopBar
@@ -138,12 +156,9 @@ export default function App() {
         onSelectShow={setSelectedShowId}
         onNewShow={() => setModal("newShow")}
         onOpenShowBible={() => setModal("bible")}
-        onEditFootage={() => setFootageMode(true)}
       />
 
-      {footageMode ? (
-        <FootageEditor onClose={() => setFootageMode(false)} />
-      ) : noShows ? (
+      {noShows ? (
         <WelcomeScreen onNewShow={() => setModal("newShow")} onImport={() => setModal("import")} />
       ) : (
         <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
@@ -191,7 +206,19 @@ export default function App() {
 
           {/* Script editor */}
           <main className="min-h-0 min-w-0 flex-1 overflow-y-auto border-neutral-800 lg:border-r">
-            {scene ? (
+            {episode && (
+              <div role="tablist" aria-label="Writing view" className="sticky top-0 z-10 flex gap-1 border-b border-neutral-800 bg-neutral-950/95 px-3 py-1.5 backdrop-blur">
+                {([["scene", "Scene", PenLine], ["beats", "Beat board", LayoutList]] as const).map(([id, label, Icon]) => (
+                  <button key={id} type="button" role="tab" aria-selected={view === id} onClick={() => setView(id)}
+                    className={`flex cursor-pointer items-center gap-1.5 rounded-md px-2.5 py-1 text-[12px] font-medium transition-colors ${view === id ? "bg-neutral-800 text-amber-200" : "text-neutral-500 hover:text-neutral-300"}`}>
+                    <Icon size={12} aria-hidden /> {label}
+                  </button>
+                ))}
+              </div>
+            )}
+            {view === "beats" && episode ? (
+              <BeatBoard key={episode.id} episode={episode} scenes={sceneList} onOpenScene={(id) => openScene(episode.id, id)} />
+            ) : scene ? (
               <SceneEditor
                 key={scene.id}
                 scene={scene}
@@ -233,6 +260,7 @@ export default function App() {
             sets={setList}
             characters={characterList}
             onSceneApplied={(id) => setSelectedSceneId(id)}
+            onOpenScene={openScene}
           />
         </div>
       )}
@@ -331,12 +359,12 @@ function WelcomeScreen({ onNewShow, onImport }: { onNewShow: () => void; onImpor
     <div className="flex flex-1 items-center justify-center p-6">
       <div className="max-w-md text-center">
         <Clapperboard size={40} className="mx-auto text-amber-400" aria-hidden />
-        <h1 className="mt-4 text-lg font-semibold tracking-tight text-neutral-100">Texel Studio</h1>
+        <h1 className="mt-4 text-lg font-semibold tracking-tight text-neutral-100">Showwriter Studio</h1>
         <p className="mt-2 text-[13px] leading-relaxed text-neutral-500">
           A local-first writers' room: build your show bible, register sets and characters as{" "}
           <span className="font-mono text-amber-300">#tags</span> and{" "}
           <span className="font-mono text-amber-300">@tags</span>, outline scenes, then export AI-video-ready
-          Write scenes, prepare shots, and render with Texel. Scripts stay in this browser; media jobs run on the backend.
+          Write the show, the shots and every prompt here, then hand the package to Mago Studio to generate storyboards and video. Everything stays in this browser.
         </p>
         <Button variant="primary" size="lg" className="mx-auto mt-5" onClick={onNewShow}>
           <Plus size={14} strokeWidth={2.5} /> Create your first show

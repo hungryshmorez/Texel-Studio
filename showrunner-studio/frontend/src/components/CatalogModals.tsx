@@ -4,6 +4,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import clsx from "clsx";
 import { Hash, AtSign, Plus, Trash } from "lucide-react";
 import type { CharacterEntity, CharacterRole, SetEntity, ShowMeta } from "../types";
+import { ImagePicker } from "./ImagePicker";
 import { createCharacter, createSet, deleteCharacter, deleteSet, updateCharacter, updateSet, updateShow } from "../lib/actions";
 import { Button, Chip, Field, Label, Modal, Select, TextArea, TextInput } from "./ui";
 import { useConfirm } from "./ConfirmDialog";
@@ -49,6 +50,8 @@ export function SetsManager({ open, onClose, showId, sets }: SetsManagerProps) {
   const [name, setName] = useState("");
   const [timeOfDay, setTimeOfDay] = useState("");
   const [description, setDescription] = useState("");
+  const [lookNotes, setLookNotes] = useState("");
+  const [imageIds, setImageIds] = useState<string[]>([]);
 
   useEffect(() => {
     if (!open) {
@@ -56,6 +59,8 @@ export function SetsManager({ open, onClose, showId, sets }: SetsManagerProps) {
       setName("");
       setTimeOfDay("");
       setDescription("");
+      setLookNotes("");
+      setImageIds([]);
     }
   }, [open]);
 
@@ -64,6 +69,8 @@ export function SetsManager({ open, onClose, showId, sets }: SetsManagerProps) {
     setName(s.name);
     setTimeOfDay(s.timeOfDay);
     setDescription(s.description);
+    setLookNotes(s.lookNotes ?? "");
+    setImageIds(s.referenceImageIds ?? []);
   };
 
   const reset = () => {
@@ -71,15 +78,18 @@ export function SetsManager({ open, onClose, showId, sets }: SetsManagerProps) {
     setName("");
     setTimeOfDay("");
     setDescription("");
+    setLookNotes("");
+    setImageIds([]);
   };
 
   const save = async () => {
     const trimmed = name.trim();
     if (!trimmed) return;
     if (editingId) {
-      await updateSet(editingId, { name: trimmed, timeOfDay: timeOfDay.trim(), description });
+      await updateSet(editingId, { name: trimmed, timeOfDay: timeOfDay.trim(), description, lookNotes, referenceImageIds: imageIds });
     } else {
-      await createSet(showId, { name: trimmed, timeOfDay: timeOfDay.trim(), description });
+      const id = await createSet(showId, { name: trimmed, timeOfDay: timeOfDay.trim(), description });
+      await updateSet(id, { lookNotes, referenceImageIds: imageIds });
     }
     reset();
   };
@@ -163,6 +173,12 @@ export function SetsManager({ open, onClose, showId, sets }: SetsManagerProps) {
                 aria-label="Set description"
               />
             </Field>
+            <Field label="Look" hint="Lighting, palette, lens feel. Handed to the video tool with the location.">
+              <TextInput value={lookNotes} onChange={(e) => setLookNotes(e.target.value)} placeholder="Cold blue moonlight, wet surfaces, shallow focus" aria-label="Set look" />
+            </Field>
+            <Field label="Reference images" hint="Attach these when casting in Mago Studio.">
+              <ImagePicker showId={showId} ids={imageIds} onChange={setImageIds} label={name.trim() || "this set"} />
+            </Field>
             <div className="flex items-center gap-2">
               <Button variant="primary" size="md" onClick={save} disabled={!validName}>
                 <Plus size={13} strokeWidth={2.5} />
@@ -201,6 +217,9 @@ export function CharactersManager({ open, onClose, showId, characters }: Charact
   const [gender, setGender] = useState("");
   const [visualDescription, setVisualDescription] = useState("");
   const [voiceDescription, setVoiceDescription] = useState("");
+  const [wardrobe, setWardrobe] = useState("");
+  const [distinctiveFeatures, setDistinctiveFeatures] = useState("");
+  const [imageIds, setImageIds] = useState<string[]>([]);
 
   useEffect(() => {
     if (!open) reset();
@@ -215,6 +234,9 @@ export function CharactersManager({ open, onClose, showId, characters }: Charact
     setGender("");
     setVisualDescription("");
     setVoiceDescription("");
+    setWardrobe("");
+    setDistinctiveFeatures("");
+    setImageIds([]);
   };
 
   const loadForEdit = (c: CharacterEntity) => {
@@ -225,6 +247,9 @@ export function CharactersManager({ open, onClose, showId, characters }: Charact
     setGender(c.gender);
     setVisualDescription(c.visualDescription);
     setVoiceDescription(c.voiceDescription);
+    setWardrobe(c.wardrobe ?? "");
+    setDistinctiveFeatures(c.distinctiveFeatures ?? "");
+    setImageIds(c.referenceImageIds ?? []);
   };
 
   const save = async () => {
@@ -237,6 +262,9 @@ export function CharactersManager({ open, onClose, showId, characters }: Charact
       gender: gender.trim(),
       visualDescription,
       voiceDescription,
+      wardrobe,
+      distinctiveFeatures,
+      referenceImageIds: imageIds,
     };
     if (editingId) {
       await updateCharacter(editingId, payload);
@@ -345,6 +373,17 @@ export function CharactersManager({ open, onClose, showId, characters }: Charact
                 aria-label="Voice description"
               />
             </Field>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <Field label="Wardrobe" hint="What they wear by default.">
+                <TextInput value={wardrobe} onChange={(e) => setWardrobe(e.target.value)} placeholder="Red velvet coat, one boot" aria-label="Wardrobe" />
+              </Field>
+              <Field label="Distinctive features" hint="Comma-separated: scars, glasses, gait.">
+                <TextInput value={distinctiveFeatures} onChange={(e) => setDistinctiveFeatures(e.target.value)} placeholder="eyepatch, gold tooth" aria-label="Distinctive features" />
+              </Field>
+            </div>
+            <Field label="Reference images" hint="Attach these when casting in Mago Studio so the face stays consistent.">
+              <ImagePicker showId={showId} ids={imageIds} onChange={setImageIds} label={name.trim() || "this character"} />
+            </Field>
             <div className="flex items-center gap-2">
               <Button variant="primary" size="md" onClick={save} disabled={!validName}>
                 <Plus size={13} strokeWidth={2.5} />
@@ -376,11 +415,15 @@ export function ShowBibleModal({ open, onClose, show }: ShowBibleModalProps) {
   const [title, setTitle] = useState("");
   const [genre, setGenre] = useState("");
   const [premise, setPremise] = useState("");
+  const [logline, setLogline] = useState("");
+  const [visualStyle, setVisualStyle] = useState("");
 
   useEffect(() => {
     setTitle(show?.title ?? "");
     setGenre(show?.genre ?? "");
     setPremise(show?.premise ?? "");
+    setLogline(show?.logline ?? "");
+    setVisualStyle(show?.visualStyle ?? "");
   }, [show?.id, open]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!show) return null;
@@ -412,6 +455,12 @@ export function ShowBibleModal({ open, onClose, show }: ShowBibleModalProps) {
             />
           </Field>
         </div>
+        <Field label="Logline" hint="One sentence that sells the show.">
+          <TextInput value={logline} onChange={(e) => { setLogline(e.target.value); void updateShow(show.id, { logline: e.target.value }); }} placeholder="Two pirates host a talk show nobody asked for." aria-label="Logline" />
+        </Field>
+        <Field label="Visual style" hint="The shared look. Sent to Mago Studio so every scene matches. Describe the treatment, not the story.">
+          <TextArea value={visualStyle} onChange={(e) => { setVisualStyle(e.target.value); void updateShow(show.id, { visualStyle: e.target.value }); }} rows={3} placeholder="Grainy 1990s public-access video, warm tungsten light, slightly crushed blacks" aria-label="Visual style" />
+        </Field>
         <Field
           label="Premise"
           hint="World rules, lore, visual style, glitch / broadcast aesthetics. Included as context when generating scenes with AI."

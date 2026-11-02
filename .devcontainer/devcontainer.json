@@ -1,12 +1,12 @@
 {
-  "name": "Texel Studio",
+  "name": "Showwriter Studio",
   "image": "mcr.microsoft.com/devcontainers/universal:2",
   "features": {
     "ghcr.io/devcontainers/features/node:1": { "version": "24" }
   },
   "forwardPorts": [3001],
   "portsAttributes": {
-    "3001": { "label": "Texel Studio", "onAutoForward": "openBrowser" }
+    "3001": { "label": "Showwriter Studio", "onAutoForward": "openBrowser" }
   },
   "otherPortsAttributes": { "onAutoForward": "ignore" },
   "postCreateCommand": "bash .devcontainer/setup.sh",

@@ -1,5 +1,6 @@
 // SceneEditor.tsx — Scene Outline & Script editor. Writes partial patches to
 // Dexie on every change (local-first autosave); exports engines re-run live.
+import { useState } from "react";
 import { Clapperboard, MessageSquare, Plus, Trash } from "lucide-react";
 import clsx from "clsx";
 import type { CharacterEntity, DialogueLine, EpisodeEntity, SceneEntity, SetEntity } from "../types";
@@ -8,6 +9,8 @@ import { uid } from "../lib/db";
 import { Button, Chip, Field, Label, Select, TextArea, TextInput } from "./ui";
 import { TaggedTextarea } from "./TaggedTextarea";
 import { useConfirm } from "./ConfirmDialog";
+import { SceneMeta } from "./SceneMeta";
+import { RevisionsModal } from "./RevisionsModal";
 
 interface SceneEditorProps {
   scene: SceneEntity;
@@ -21,6 +24,8 @@ interface SceneEditorProps {
 export function SceneEditor({ scene, episode, sets, characters, onOpenSets, onOpenCharacters }: SceneEditorProps) {
   const confirm = useConfirm();
   const patch = (p: Partial<SceneEntity>) => void updateScene(scene.id, p);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const set = sets.find((s) => s.id === scene.targetSetId);
 
   // --- Active characters ----------------------------------------------------
   const toggleCharacter = (cid: string) => {
@@ -65,6 +70,9 @@ export function SceneEditor({ scene, episode, sets, characters, onOpenSets, onOp
           Delete
         </Button>
       </div>
+
+      <SceneMeta scene={scene} set={set} patch={patch} onOpenHistory={() => setHistoryOpen(true)} />
+      <RevisionsModal open={historyOpen} onClose={() => setHistoryOpen(false)} scene={scene} characters={characters} />
 
       {/* Set + cast */}
       <div className="grid grid-cols-1 gap-4">

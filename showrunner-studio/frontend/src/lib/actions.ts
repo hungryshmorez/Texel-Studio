@@ -25,12 +25,25 @@ export async function updateShow(id: string, patch: Partial<Omit<ShowMeta, "id" 
   await db.shows.update(id, { ...patch, updatedAt: now() });
 }
 
+const CASCADE_TABLES = [db.shows, db.episodes, db.scenes, db.sets, db.characters, db.beats, db.revisions, db.shots, db.images];
+
+/** Removes a scene's dependants (shots, revision history) and unlinks it from any beat. */
+async function removeSceneDependants(sceneId: string) {
+  await db.shots.where("sceneId").equals(sceneId).delete();
+  await db.revisions.where("sceneId").equals(sceneId).delete();
+  await db.beats.where("sceneId").equals(sceneId).modify({ sceneId: null });
+}
+
 export async function deleteShow(id: string) {
-  await db.transaction("rw", db.shows, db.episodes, db.scenes, db.sets, db.characters, async () => {
+  await db.transaction("rw", CASCADE_TABLES, async () => {
     const episodes = await db.episodes.where("showId").equals(id).toArray();
     for (const ep of episodes) {
+      const scenes = await db.scenes.where("episodeId").equals(ep.id).toArray();
+      for (const scene of scenes) await removeSceneDependants(scene.id);
       await db.scenes.where("episodeId").equals(ep.id).delete();
+      await db.beats.where("episodeId").equals(ep.id).delete();
     }
+    await db.images.where("showId").equals(id).delete();
     await db.episodes.where("showId").equals(id).delete();
     await db.sets.where("showId").equals(id).delete();
     await db.characters.where("showId").equals(id).delete();
@@ -62,8 +75,11 @@ export async function updateEpisode(id: string, patch: Partial<Omit<EpisodeEntit
 }
 
 export async function deleteEpisode(id: string) {
-  await db.transaction("rw", db.episodes, db.scenes, async () => {
+  await db.transaction("rw", CASCADE_TABLES, async () => {
+    const scenes = await db.scenes.where("episodeId").equals(id).toArray();
+    for (const scene of scenes) await removeSceneDependants(scene.id);
     await db.scenes.where("episodeId").equals(id).delete();
+    await db.beats.where("episodeId").equals(id).delete();
     await db.episodes.delete(id);
   });
 }
@@ -99,7 +115,10 @@ export async function updateScene(id: string, patch: Partial<Omit<SceneEntity, "
 }
 
 export async function deleteScene(id: string) {
-  await db.scenes.delete(id);
+  await db.transaction("rw", CASCADE_TABLES, async () => {
+    await removeSceneDependants(id);
+    await db.scenes.delete(id);
+  });
 }
 
 // --- Sets ----------------------------------------------------------------------
@@ -139,7 +158,10 @@ export async function updateCharacter(id: string, patch: Partial<Omit<CharacterE
 }
 
 export async function deleteCharacter(id: string) {
-  await db.transaction("rw", db.characters, db.scenes, async () => {
+  await db.transaction("rw", db.characters, db.scenes, db.shots, async () => {
+    await db.shots.filter((shot) => shot.castIds.includes(id)).modify((shot) => {
+      shot.castIds = shot.castIds.filter((cid) => cid !== id);
+    });
     const affected = await db.scenes
       .filter((s) => s.activeCharacterIds.includes(id) || s.dialogue.some((d) => d.characterId === id))
       .toArray();
