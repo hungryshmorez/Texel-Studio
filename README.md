@@ -1,194 +1,203 @@
-# Texel Studio
+# Showwriter Studio
 
-**Edit existing footage with Texel's cloud GPU editing API.** Upload clips and a theme song, trim and reorder them, normalize loudness, and render a 720p cut on Texel. Built for the AAIFF Global GenJam, Engineering track (Texel API).
+**Write the show, the shots and every prompt here. Let [Mago Studio](https://github.com/MagoStudio/MagoStudio) draw the storyboards and render the video.**
 
-Texel Studio is a React + TypeScript app with a FastAPI backend. Alongside the footage editor it keeps the original writers' room: show bible, characters, sets, scenes, AI script critique, and an "Outline to Trailer" keyframe workflow.
+Showwriter Studio is a local-first writers' room for AI video. You build the show bible, outline episodes as beats, write scenes, and turn each scene into a shot list with the words for every storyboard and video prompt. Then it packages everything for Mago Studio's Director, which does the pictures. Your writing stays in your browser.
 
-> **Honest status.** A real Texel cloud edit (reorder, trim, loudness normalization, GPU encode) was run successfully through a standalone script (job `254c23d1-8f4b-468a-b1da-41f04d814acd`: 191.6 s, trailer → music video → episode). The browser app's upload → Texel → download flow is verified only against a local storage stand-in and a **simulated** encoder, not yet against live Texel. See [Verification status](#verification-status).
+> **Honest status.** The writing tools, exports and AI assist are tested (see [Verification](#verification)). Two things have **not** been tried: a real Gemini key (the AI features were tested against a fake model), and the exported package inside a real Mago Studio (Mago has no script importer, so you paste the package by hand, and I could not run its desktop app).
 
 ## Contents
 
-1. [What it does](#what-it-does)
-2. [Quick start](#quick-start)
-3. [Configuration](#configuration)
-4. [Making a video with Edit footage](#making-a-video-with-edit-footage)
-5. [How it works](#how-it-works)
-6. [Verification status](#verification-status)
-7. [Limitations](#limitations)
-8. [Hosting it](#hosting-it)
-9. [Development and tests](#development-and-tests)
-10. [Troubleshooting](#troubleshooting)
-11. [Repository layout](#repository-layout)
+1. [How it fits with Mago Studio](#how-it-fits-with-mago-studio)
+2. [What it does](#what-it-does)
+3. [Workflow](#workflow)
+4. [The Mago package](#the-mago-package)
+5. [Quick start](#quick-start)
+6. [Configuration](#configuration)
+7. [Your data](#your-data)
+8. [Verification](#verification)
+9. [Limitations](#limitations)
+10. [Hosting](#hosting)
+11. [Development and tests](#development-and-tests)
+12. [Troubleshooting](#troubleshooting)
+13. [Repository layout](#repository-layout)
+
+## How it fits with Mago Studio
+
+Mago Studio is a separate, local-first AI video editor (Electron + Next.js, [AGPL-3.0](https://github.com/MagoStudio/MagoStudio/blob/main/LICENSE)). Its **Mago Director** turns a script into cast, storyboards and consistent video scenes, rendering on your own GPU through ComfyUI or in Mago Cloud.
+
+The two programs split the job:
+
+| Showwriter Studio writes | Mago Studio makes |
+|---|---|
+| Show bible, characters, sets, visual style | Cast and reference sheets |
+| Scenes, dialogue, beats | The Director script project |
+| The shot list: framing, movement, timing, spoken words | Storyboards (one panel per shot) |
+| Storyboard prompts and video prompts, in words | Rendered video |
+
+They connect through a **file package**, not shared code. Mago has no script import, so you paste the package into Mago Director by hand. Showwriter contains no Mago code, so the two keep separate licenses.
 
 ## What it does
 
-### Edit footage (the main feature)
-- **Media library:** upload video and audio (up to 1 GB each). Files are probed with ffprobe for duration, resolution and audio presence.
-- **Timeline:** up to 12 clips, each with a source in-point and length (up to 300 s per clip). Reorder or remove clips freely.
-- **Audio:** keep each clip's own audio, or replace it with a theme song starting at a chosen offset (for example 8.9 s to skip a silent intro). Optional loudness normalization (−16 LUFS) and Texel Studio Voice enhancement for speech.
-- **Render:** the backend builds a Texel `video_encoder` filter graph and submits one job. Progress survives page reloads, and an interrupted render can be resumed without submitting (or paying) again.
-- **Result:** preview in the page and download an MP4 (1280×720, 30 fps, H.264 + AAC).
-- **Two ways to give Texel your media:**
-  - *Managed storage:* the backend uploads to an S3-compatible bucket (AWS S3, Cloudflare R2, MinIO) and mints presigned URLs itself. You paste nothing.
-  - *Bring your own URLs:* "I already host my files" accepts signed input URLs plus an output upload (PUT) URL and its read URL. No bucket needed.
+### Writing tools
+- **Show bible:** logline, genre, world, and a shared **visual style** that Mago applies to every scene.
+- **Beat board:** plan an episode from a structure (five beats, three acts, sitcom A/B/C, Save the Cat, Hero's Journey), reorder beats, and create a scene from any beat.
+- **Scenes:** status (idea, draft, revised, locked), screenplay heading (INT/EXT and time of day), one-line summary, action, dialogue with parentheticals, and `@Character` / `#Set` tags.
+- **History:** save named versions, compare any version with the current scene line by line, and restore. A restore keeps your current text as a "Before restore" copy.
+- **Checks:** instant, offline checks against the bible: missing sets, speakers who are not in the cast, unknown `@`/`#` tags, shots whose cast is not in the scene, dialogue too long for its shots, characters without a look. Click a result to jump to the scene.
 
-### Writers' room and trailer tools (existing)
-- Show bible, characters, sets, episodes and scenes with `@Character` / `#Set` tagging. Stored in your browser (IndexedDB). JSON import/export; document import (`.txt`, `.md`, `.pdf`, `.docx`).
-- AI scene drafting and Script Lab (critique, write, rewrite) using Gemini. Needs `PROJEC_GOOGLE_API_KEY`.
-- Showrunner and Seedance prompt exports.
-- Outline to Trailer: scenes become editable keyframe prompts, Texel generates images, you approve them, and approved stills assemble into a storyboard trailer. FramePack animation exists in the code but is **not verified** (see below).
+### Visual bible
+- Characters: visual description, wardrobe, distinctive features, voice, and reference images.
+- Sets: description, look (lighting, palette), and reference images.
+- Images are shrunk in your browser (1024 px long edge) and stored inside the project, so a backup is one file.
+
+### Shot list and prompts
+- Per scene: shot number, duration, framing, camera movement, what the camera sees, the words spoken in that shot, who is in it, a **storyboard prompt**, a **video prompt**, and notes.
+- Copy the shot table in Mago's `[Shot n] (start-end s) …` line format, or download a CSV.
+
+### AI assist (needs a Gemini key)
+- **Write shot list:** breaks a scene into shots. Dialogue is copied word for word, cast is limited to names you registered, and the visual style is never written into prompts (Mago applies it separately). Replacing existing shots asks first and offers **Undo**.
+- **Fill missing prompts:** writes only prompts that are empty. Your own words are never overwritten.
+- **Continuity check:** reads scenes against the bible and reports contradictions (looks, wardrobe, locations, things that appear or vanish). It does not judge quality.
+- **Locked scenes** are never overwritten by AI. The AI Scene panel saves a "Before AI scene" version before it applies a draft.
+- Older tools remain: AI scene drafting, the Script Lab (critique, write, rewrite) and the Showrunner/Seedance prompt exporters.
+
+### Exports
+- **Mago package** (zip): see below.
+- **Fountain** screenplay for Final Draft, Highland, Fade In and others.
+- **Project JSON** for backup and moving between browsers (includes images, shots, beats and history).
+
+## Workflow
+
+1. Create a show. Open **Show Bible** and write the logline and the visual style.
+2. Add **Characters** and **Sets** with descriptions and reference images.
+3. Open an episode, switch to **Beat board**, add a structure, and create scenes from the beats.
+4. Write each scene. Mark it **Revised** as you go and **Locked** when it is done.
+5. In the **Shots** tab, write the shot list (by hand or with AI) and the storyboard and video prompts.
+6. In the **Mago** tab, review the checks, then **Download package**.
+7. In Mago Studio, create a **Mago Director** project and follow the package's `README.txt`.
+
+## The Mago package
+
+| File | Use |
+|---|---|
+| `README.txt` | The steps for pasting this into Mago Director |
+| `director-script.txt` | Paste into the Director script box: title, logline, visual style, cast, environments, then the script with standard scene headings (which Mago's casting reads) |
+| `shots/E01-S01-<scene>.txt` | The shot table for each scene, in `[Shot n] (start-end s) …` lines, plus one video prompt per shot |
+| `storyboard-prompts.md` | The written storyboard direction for each shot |
+| `cast/`, `environments/` | A description and your reference images for each; attach them when casting |
+| `script.fountain` | The same script for screenwriting tools |
+| `showwriter-project.json` | Everything in a structured form (schema `showwriter-mago-bridge` v1) for a future importer |
+
+Rules: only the cast and sets used by the exported scenes are described; scenes with no action and no dialogue are left out (the notes say so); writer's notes never go to the video tool. You can export the whole show or one episode.
 
 ## Quick start
 
-### GitHub Codespaces (works from a browser or tablet)
-1. Open https://codespaces.new/hungryshmorez/Texel-Studio and choose **Create codespace**. Setup installs Node 24, Python, uv, ffmpeg and the locked dependencies, then starts both servers.
-2. In the terminal, add your keys (see [Configuration](#configuration)):
+### GitHub Codespaces (works from a tablet)
+1. Open https://codespaces.new/hungryshmorez/Texel-Studio and choose **Create codespace**. Setup installs Node 24, Python and uv, then starts both servers.
+2. Open the **Ports** tab, find port **3001**, and open it in the browser. Keep it **Private**: the development build has no login.
+3. For AI features, add your key (see [Configuration](#configuration)) and restart:
    ```bash
    cd /workspaces/Texel-Studio/showrunner-studio
    cp .env.example .env      # then edit .env
-   ```
-3. Restart the app so it reads `.env`:
-   ```bash
    pkill -f uvicorn; pkill -f vite
    cd /workspaces/Texel-Studio && bash .devcontainer/start.sh
    ```
-4. Open the **Ports** tab, find port **3001**, and open it in the browser. Keep the port **Private** unless someone else must use it: the dev build has no login, and a render spends Texel credits.
 
-Logs are in `.devcontainer/.runtime/studio.log`. Export project JSON before deleting a Codespace; scripts live in your browser and media/jobs live in the Codespace.
+Everything except the AI buttons works without a key.
 
 ### On your computer
-Requirements: Node 22.12+ (or 24+), Python 3.12+, [uv](https://docs.astral.sh/uv/), ffmpeg and ffprobe on your PATH.
+Requirements: Node 22.12+ (or 24+), Python 3.12+, [uv](https://docs.astral.sh/uv/).
 
 ```bash
-cp showrunner-studio/.env.example showrunner-studio/.env   # edit it
+cp showrunner-studio/.env.example showrunner-studio/.env   # optional: add the Gemini key
 ./start.sh
 ```
 Open http://localhost:3001. The backend listens on 3101 and Vite proxies `/api` to it.
 
 ## Configuration
 
-All settings are server-side environment variables in `showrunner-studio/.env` (gitignored). Never put them in `VITE_*` variables, commit them, or paste them into the browser.
+Settings are server-side environment variables in `showrunner-studio/.env` (gitignored). Never put them in `VITE_*` variables or commit them.
 
 | Variable | Needed for | Notes |
 |---|---|---|
-| `TEXEL_EDITING_API_KEY` | Rendering with Texel | Production editing key (`txl_…`). Check it with a read-only call: `GET https://api.prod.texel.ai/v1/billing/usage` returns 404 if the key is valid and 403 "invalid api key" if not. |
-| `TEXEL_API_KEY` | Image/video generation | Used by the keyframe workflow. Editing falls back to it if no editing key is set. |
-| `TEXEL_S3_ENDPOINT`, `TEXEL_S3_BUCKET`, `TEXEL_S3_ACCESS_KEY_ID`, `TEXEL_S3_SECRET_ACCESS_KEY`, `TEXEL_S3_REGION` | Managed uploads | Optional. Any S3-compatible bucket reachable by Texel over HTTPS. Without these, use "I already host my files". |
-| `PROJEC_GOOGLE_API_KEY` | AI drafting and Script Lab | Gemini. Independent of Texel. |
-| `TEXEL_DATA_DIR` | Persistent media and job state | Defaults to `backend/.texel-data`. |
+| `PROJEC_GOOGLE_API_KEY` | All AI buttons | A Gemini API key. Without it, AI buttons explain what to add; nothing else is affected. The model name `gemini-3.8-flash` is set in `backend/main.py` and has not been verified against a live key. |
 | `APP_PASSWORD` | Public hosting | Turns on a login prompt (HTTP Basic, any username). |
-| `TEXEL_REQUIRE_PASSWORD=1` | Public hosting | Refuse to start without `APP_PASSWORD`. Set in the Dockerfile. |
+| `REQUIRE_PASSWORD=1` | Public hosting | Refuse to start without `APP_PASSWORD`. Set in the Dockerfile. |
 
-The Texel keys never reach the browser. Signed URLs and storage keys stay in the backend store and are never returned by the API.
+## Your data
 
-## Making a video with Edit footage
+- Scripts, bible, shots, history and images live in your **browser** (IndexedDB database `showrunner-studio`, the same name as before the rename, so older projects still open). The server stores nothing.
+- Clearing site data deletes them. **Export JSON** (top bar) regularly. The export is version 2; version 1 files from older builds still import.
+- Only text from the scene you are working on (and its bible entries) is sent to Gemini when you press an AI button. Reference images are never sent.
 
-1. Click **Edit footage** in the top bar and create a project.
-2. **With a bucket:** upload your files, then **Add to timeline** for each clip. **Without a bucket:** open "I already host my files" and paste signed URLs (see below).
-3. Set each clip's start and length, and order them top to bottom.
-4. Pick the soundtrack and its start offset, or keep original audio. Leave normalization on.
-5. Click **Render with Texel** and confirm. Watch progress, then preview and download.
-
-### Bring-your-own URLs
-Texel's encoder needs HTTPS URLs it can read, and a writable location for the result. Provide:
-- a readable signed URL for each source clip (and the song, if used);
-- an **output upload URL** (a signed PUT) and the matching **output read URL**, so the app can download the finished file.
-
-Every clip length must be typed in, since remote files can't be probed. Every source needs an audio track unless you choose a soundtrack. Share pages that return HTML (for example a "download" page) are not valid inputs. If the host blocks the server's download of the finished file, the render still completes on Texel; use Resume once you have a working read URL, or fetch the file in a browser.
-
-### Reproducing the verified job
-The verified render used one pre-built montage (episode → music video → trailer) as the single source, three clips from it, in this output order:
-
-| Order | Start in source (s) | Length (s) |
-|---|---:|---:|
-| 1. Trailer | 134.266667 | 57.333333 |
-| 2. Music video | 75.233333 | 59.033333 |
-| 3. Episode | 0 | 75.233333 |
-
-Keep original audio, no soundtrack, normalize on. The song's 8.9 s in-point was already applied when the montage was built; do not apply it again. Expected result: 191.6 s, 1280×720, 30 fps, H.264/AAC, about −16 LUFS per section.
-
-## How it works
-
-```
-Browser (React, Vite)  ──/api──►  FastAPI backend ──► Texel production API (api.prod.texel.ai/v1)
- IndexedDB: scripts                │  uploads, ffprobe checks, job store (SQLite + disk)
-                                   └► S3-compatible bucket (optional) ◄── Texel reads inputs / writes output
-```
-
-- **Encoder contract:** `POST /video_encoder/encode` with labeled inputs, a trim/scale/pad/fps/tpad filter chain per clip, `concat`, optional `loudnorm`, and a writable output URL; then poll `/video_encoder/status/{job_id}`. H.264 NVENC at 4M, AAC 48 kHz stereo 192k. **AAC `quality: "2"` is required**: if omitted Texel emits an empty `-aq` option and the job fails.
-- **No duplicate paid jobs:** a client job ID is saved before submit and the Texel job ID right after. Interrupted jobs are resumed by polling, never resubmitted.
-- **Validation:** generated FramePack clips keep a strict 120 s / 100 MiB policy. Assembled cuts are validated against the submitted plan: duration within max(1.5 s, 2%) of planned, audio present when requested, and a size cap scaled to length (100 MiB floor, 4 GiB ceiling).
-- **Safety:** SSRF checks on every downloaded URL (public HTTPS only, redirects validated, API key never forwarded). Silent sources are rejected before any paid job when original audio is required.
-- **State:** one backend process. Jobs and snapshots are in SQLite plus files under `TEXEL_DATA_DIR`; interrupted work is marked on restart.
-
-More detail, including the Texel SDK generation contract, is in [`showrunner-studio/TEXEL.md`](showrunner-studio/TEXEL.md).
-
-## Verification status
+## Verification
 
 | Area | Evidence | Status |
 |---|---|---|
-| Texel cloud edit (reorder, trim, loudness, GPU encode) | Real job `254c23d1-8f4b-468a-b1da-41f04d814acd`, 191.6 s, fully decoded and measured | **Verified live**, via a standalone script |
-| Editing key authentication | Read-only call returns the expected 404 (403 for a bad key) | Verified live |
-| Image generation (keyframes) | One real SDK call returned a valid PNG | Verified live |
-| FramePack animation | Two attempts failed at the provider | **Not verified** |
-| Upload → Texel → download in this app | Playwright against real UI + backend, with a local S3 stand-in and a simulated encoder; 205 s and 135 s cuts | Verified against stand-ins only |
-| Backend tests | 29 pass (`uv run python -m unittest discover -s tests`) | Pass |
-| Frontend | Build passes; 3 compiler tests pass; lint has pre-existing warnings | Pass |
-| Studio Voice, eye-contact, lip sync | Present in Texel docs | Not tested or exposed |
+| Data layer (cascades, history restore, reordering, import of v1 files) | 13 tests against a fake IndexedDB | Pass |
+| Fountain, shot-table formatting, Mago package (unzipped and read back), consistency checks | 27 tests | Pass |
+| AI request building, result application, job polling | 10 tests, including "never overwrite the writer's prompts" | Pass |
+| AI prompts, strict output parsers, endpoints | 15 backend tests with a fake model | Pass |
+| Whole app in a real browser (Playwright): bible, image upload and downscaling, scene, history diff and restore, beat board, shots, package download, reload persistence, project export | Scripted run, zero console errors | Pass |
+| AI buttons in a real browser | Same, against a **fake** model; plus the no-key message | Pass with a fake model |
+| Gemini with a real key | No key was available | **Not tested** |
+| Package pasted into a real Mago Studio | Mago's desktop app could not be run; the format follows Mago's published docs and prompts | **Not tested** |
+| Codespaces setup, Docker image, Render deployment | Config written, not built | **Not tested** |
 
 ## Limitations
 
-- Single-user development service: no accounts, no per-user quotas, CORS open. Use `APP_PASSWORD` if you expose it.
-- Texel advises at most two concurrent requests; the app has a two-worker pool per process but no account-wide cap across processes.
-- A soundtrack **replaces** all clip audio. There is no multi-track mix, ducking or beat alignment.
-- No visual timeline scrubber; clips are edited as rows.
-- The app does not generate footage, music or voice. Text/music generation isn't in Texel's public production docs.
-- Large uploads pass through the host's proxy and may hit its request-size limit.
-- Your Texel credit balance can't be read (the billing endpoint is unavailable for this account).
+- Single user, no accounts. Use `APP_PASSWORD` if you expose it.
+- No import for Mago's own projects, and Mago has no script importer, so the last step is a manual paste.
+- AI quality depends on the model. Always read generated shots; the dialogue-verbatim rule is requested in the prompt and the structure is validated, but wording is not machine-verified.
+- Storyboards and video are made in Mago. Showwriter writes the words only.
+- No real-time collaboration. Backups are manual.
+- Mago Studio is licensed AGPL-3.0. If you later copy Mago's code into this project, the combined work must also be AGPL. The package format avoids that by exchanging files.
 
-## Hosting it
+## Hosting
 
-GitHub stores the code but cannot run it: GitHub Pages serves static files only, and this app needs the Python backend, ffmpeg and a persistent disk.
+GitHub stores the code but cannot run it: GitHub Pages is static, and the AI endpoints need the Python backend.
 
-- **Codespaces:** free for development; a Codespace sleeps when idle and Public port visibility resets on restart.
-- **Docker / Render:** `showrunner-studio/Dockerfile` builds the frontend and backend into one container (single origin, password gate); `render.yaml` is a Render Blueprint with a persistent disk. Set `APP_PASSWORD`, the Texel keys and any `TEXEL_S3_*` values as secrets in the host dashboard. Run exactly one instance. The Docker image build and a real deployment have **not** been tested.
+- **Codespaces:** free for development; it sleeps when idle and Public port visibility resets on restart.
+- **Docker / Render:** `showrunner-studio/Dockerfile` builds the frontend and backend into one container (single origin, password gate); `render.yaml` is a Render Blueprint. The backend is stateless, so no disk is needed. Set `APP_PASSWORD` and `PROJEC_GOOGLE_API_KEY` as secrets. The image build and a real deployment have not been tested.
 
 ## Development and tests
 
 ```bash
 cd showrunner-studio/backend
 uv sync --locked
-uv run python -m unittest discover -s tests -v     # 29 tests, no network, no Texel credits
+uv run python -m unittest discover -s tests -v     # 15 tests, no network, no Gemini key
 
 cd ../frontend
 npm ci
-npm run test:texel      # compiler tests
-npm run build           # type-check + production bundle
+npm test            # 50 tests (Node test runner, fake IndexedDB)
+npm run build       # type-check + production bundle
 npm run lint
 ```
-
-Automated tests never call Texel. The test suite includes AWS's published SigV4 presign vector, a 191.6 s cut that the old validator rejected, and an upload → render → download flow with fake storage and a fake encoder.
 
 ## Troubleshooting
 
 | Symptom | Fix |
 |---|---|
-| `invalid api key` (403) | Re-check the key. In the screenshot-transcribed editing key, a letter **O** and a zero look alike. |
-| "Backend setup needed" chip in Edit footage | `TEXEL_EDITING_API_KEY` missing (render won't work) or `TEXEL_S3_*` missing (uploads unavailable; use "I already host my files"). Restart the app after editing `.env`. |
-| Page shows 502 in Codespaces | The server stopped or the Codespace slept. Restart it from the terminal (Quick start step 3) and re-check port visibility. |
-| Codespace opens in "recovery mode" | The container build failed. Run **Codespaces: View Creation Log**. The setup script is now tolerant of apt/tool install failures. |
-| Render finishes on Texel but the app shows "interrupted" | The app couldn't download the result (blocked host, expired or non-video read URL). Provide a working output read URL and use **Resume**. |
-| "No audio track" before rendering | A source clip is silent. Turn off original audio or choose a soundtrack. |
+| AI buttons say "AI writing is not set up" | Add `PROJEC_GOOGLE_API_KEY` to `showrunner-studio/.env` and restart the server. |
+| An AI job fails with "did not return valid JSON" | The model replied in the wrong shape. Press the button again. |
+| "The AI model is temporarily overloaded" | Gemini was busy. Wait a few seconds and retry. |
+| The package is missing a scene | Scenes with no action or dialogue are left out on purpose; the export notes say how many. |
+| A scene's heading shows `.SCENE NAME` in Fountain | The scene has no set, so it uses a forced heading. Choose a set. |
+| Everything is gone after switching browsers | Projects live in each browser. Use **Export JSON** and **Import JSON**. |
+| Page shows 502 in Codespaces | The server stopped or the Codespace slept. Restart it from the terminal (Quick start step 3). |
 
 ## Repository layout
 
 ```
 showrunner-studio/
-  backend/           FastAPI app: Texel client and encoder, uploads, storage, job store, tests
-  frontend/          React + TypeScript app (Footage Editor, writers' room, Texel panels)
-  TEXEL.md           Detailed integration contracts, hosting and verification notes
-  Dockerfile         One-container build (frontend + backend)
-.devcontainer/       Codespaces setup (stock image + ffmpeg/uv)
+  backend/           FastAPI: AI endpoints (ai_writing.py has prompts and parsers), hosting gate, tests
+  frontend/          React + TypeScript
+    src/lib/         Data layer, Fountain, shot list, Mago package, consistency checks, AI request builders
+    src/components/  Beat board, scene editor, history, shot list, Mago panel, bible forms
+    tests/           Unit and data-layer tests
+  Dockerfile         One-container build
+.devcontainer/       Codespaces setup (stock image + uv)
 render.yaml          Render Blueprint
 public/ source/      Legacy static Script Studio prototype, served at /legacy/public/
 ```
