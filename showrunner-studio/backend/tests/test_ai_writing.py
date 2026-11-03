@@ -181,6 +181,18 @@ class EndpointTests(unittest.TestCase):
         self.assertEqual(status["status"], "error")
         self.assertIn("overloaded", status["error"])
 
+    def test_mago_complete_hands_back_raw_text_and_asks_for_json(self):
+        status, fake = self.run_job("/api/mago/complete/start", {"prompt": "Return a cast."}, '{"characters": []}')
+        self.assertEqual(status["status"], "done", status)
+        self.assertEqual(status["result"]["data"], '{"characters": []}')
+        call = fake.calls[0]
+        self.assertEqual(call["contents"], "Return a cast.")
+        self.assertEqual(call["config"]["response_mime_type"], "application/json")
+
+    def test_mago_complete_rejects_a_blank_prompt(self):
+        self.assertEqual(self.http.post("/api/mago/complete/start", json={"prompt": "   "}).status_code, 400)
+        self.assertEqual(self.http.post("/api/mago/complete/start", json={"prompt": ""}).status_code, 422)
+
 
 if __name__ == "__main__":
     unittest.main()

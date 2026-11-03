@@ -11,6 +11,7 @@ import { downloadBlob } from "../lib/download";
 import { runAiJob } from "../lib/aiJobs";
 import { continuityRequest, type ContinuityNote } from "../lib/aiWriting";
 import { Button, Chip, CopyButton, Select } from "./ui";
+import { CastFromScript } from "./CastFromScript";
 
 const ICONS: Record<Severity, typeof Info> = { error: CircleAlert, warn: AlertTriangle, info: Info };
 const TONES: Record<Severity, string> = { error: "text-red-300", warn: "text-amber-300", info: "text-neutral-400" };
@@ -94,6 +95,8 @@ export function MagoPanel({ show, episode, sets, characters, onOpenScene }: Mago
         )}
         {issues.length > 6 && <Button size="xs" variant="subtle" onClick={() => setShowAll(!showAll)}>{showAll ? "Show fewer" : `Show all ${issues.length}`}</Button>}
       </section>
+
+      <CastFromScript show={show} scenes={scopedScenes} sets={sets} characters={characters} />
 
       <section className="space-y-2" aria-label="AI continuity check">
         <div className="flex items-center justify-between gap-2">

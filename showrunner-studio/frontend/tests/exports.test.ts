@@ -104,6 +104,17 @@ describe("Mago bridge package", () => {
     assert.equal(json.episodes[0].scenes[0].shots[1].endSeconds, 6.5);
   });
 
+  it("adds the scene's saved storyboard and video prompts to its shot file and the storyboard document", () => {
+    const withPrompts = { ...scene1, clipPrompts: { storyboard: "STORYBOARD SHEET TEXT", video: "COMPOSED VIDEO TEXT", updatedAt: 1 } };
+    const pkg = buildBridge({ ...input, scenes: [withPrompts], shots: [shot1, shot2] });
+    const shotFile = pkg.files.find((f) => f.path.startsWith("shots/"))?.text ?? "";
+    assert.match(shotFile, /STORYBOARD SHEET PROMPT[^\n]*\nSTORYBOARD SHEET TEXT/);
+    assert.match(shotFile, /COMPOSED VIDEO PROMPT[^\n]*\nCOMPOSED VIDEO TEXT/);
+    assert.match(pkg.files.find((f) => f.path === "storyboard-prompts.md")?.text ?? "", /Whole-scene sheet prompt:\n\nSTORYBOARD SHEET TEXT/);
+    const plain = buildBridge({ ...input, scenes: [scene1], shots: [shot1, shot2] });
+    assert.ok(!(plain.files.find((f) => f.path.startsWith("shots/"))?.text ?? "").includes("COMPOSED VIDEO PROMPT"));
+  });
+
   it("can export a single episode", () => {
     const second = { ...episode, id: "ep2", title: "Second", order: 2 };
     const other = { ...scene1, id: "scnX", episodeId: "ep2", sceneName: "Elsewhere" };
