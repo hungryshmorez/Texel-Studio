@@ -717,6 +717,47 @@ def _start_parsed_job(prompt_builder, parser):
     return {"job_id": job_id}
 
 
+class MagoCompleteRequest(BaseModel):
+    """One prompt from the ported Mago pipelines (casting, shot breakdown, video prompt).
+
+    The browser builds the prompt and validates the reply against Mago's schemas, so this endpoint is
+    deliberately dumb: it asks Gemini for a JSON object and hands the raw text back.
+    """
+
+    prompt: str = Field(..., min_length=1, max_length=400_000)
+    max_output_tokens: int = Field(default=32768, ge=256, le=65536)
+
+
+def _start_text_job(prompt: str, max_output_tokens: int):
+    job_id = uuid.uuid4().hex
+    _ai_jobs[job_id] = {"status": "pending", "result": None, "error": None, "created": time.time()}
+
+    def run_job():
+        try:
+            client = get_client()
+            response = generate_with_retry(
+                client,
+                model="gemini-3.8-flash",
+                contents=prompt,
+                config={"max_output_tokens": max_output_tokens, "response_mime_type": "application/json"},
+            )
+            _ai_jobs[job_id] = {"status": "done", "result": {"data": response.text or ""}, "error": None}
+        except HTTPException as e:
+            _ai_jobs[job_id] = {"status": "error", "result": None, "error": str(e.detail)}
+        except Exception as e:
+            _ai_jobs[job_id] = {"status": "error", "result": None, "error": f"Unexpected error: {e}"}
+
+    threading.Thread(target=run_job, daemon=True).start()
+    return {"job_id": job_id}
+
+
+@app.post("/api/mago/complete/start")
+async def mago_complete_start(req: MagoCompleteRequest):
+    if not req.prompt.strip():
+        raise HTTPException(status_code=400, detail="The prompt is empty.")
+    return _start_text_job(req.prompt, req.max_output_tokens)
+
+
 @app.post("/api/shots/generate/start")
 async def shot_list_start(req: ai_writing.ShotListRequest):
     if not req.scene.action.strip() and not req.scene.dialogue:

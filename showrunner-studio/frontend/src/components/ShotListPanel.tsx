@@ -10,6 +10,8 @@ import { runAiJob } from "../lib/aiJobs";
 import { hasMissingPrompts, promptPatches, shotDraftsFromAi, shotListRequest, shotPromptsRequest, type AiPrompt, type AiShot } from "../lib/aiWriting";
 import { FRAMING_OPTIONS, MOVEMENT_OPTIONS, formatShotLines, shotsToCsv, totalDuration } from "../lib/shotlist";
 import { downloadBlob } from "../lib/download";
+import { breakDownScene, geminiRun } from "../lib/magoWriting";
+import { ClipPrompts } from "./ClipPrompts";
 import { Button, Chip, CopyButton, Field, TextArea, TextInput } from "./ui";
 import { useConfirm } from "./ConfirmDialog";
 
@@ -25,7 +27,7 @@ const friendly = (message: string) => (/not configured/i.test(message) ? "AI wri
 
 export function ShotListPanel({ show, scene, set, characters }: ShotListPanelProps) {
   const confirm = useConfirm();
-  const [busy, setBusy] = useState<"list" | "prompts" | null>(null);
+  const [busy, setBusy] = useState<"list" | "prompts" | "mago" | null>(null);
   const [message, setMessage] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
   const [undo, setUndo] = useState<{ sceneId: string; drafts: ShotDraft[] } | null>(null);
   const abort = useRef<AbortController | null>(null);
@@ -53,6 +55,25 @@ export function ShotListPanel({ show, scene, set, characters }: ShotListPanelPro
       await replaceShots(scene.id, shotDraftsFromAi(shots, characters));
       setUndo(list.length ? { sceneId: scene.id, drafts: previous } : null);
       setMessage({ tone: "ok", text: `Wrote ${shots.length} ${shots.length === 1 ? "shot" : "shots"}. Check the words before you send them to Mago.` });
+    } catch (cause) {
+      if ((cause as Error).name !== "AbortError") setMessage({ tone: "error", text: friendly((cause as Error).message) });
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const magoBreakdown = async () => {
+    if (!show || locked) return;
+    if (list.length > 0 && !(await confirm({ message: `Replace the ${list.length} existing ${list.length === 1 ? "shot" : "shots"} with Mago's shot breakdown? You can undo this right after.`, confirmLabel: "Replace shots" }))) return;
+    setMessage(null);
+    setBusy("mago");
+    abort.current = new AbortController();
+    try {
+      const drafts = await breakDownScene(scene, set, characters, geminiRun(abort.current.signal));
+      const previous = list.map(toDraft);
+      await replaceShots(scene.id, drafts);
+      setUndo(list.length ? { sceneId: scene.id, drafts: previous } : null);
+      setMessage({ tone: "ok", text: `Mago's engine wrote ${drafts.length} ${drafts.length === 1 ? "shot" : "shots"}. Check the words, then fill the prompts.` });
     } catch (cause) {
       if ((cause as Error).name !== "AbortError") setMessage({ tone: "error", text: friendly((cause as Error).message) });
     } finally {
@@ -101,6 +122,7 @@ export function ShotListPanel({ show, scene, set, characters }: ShotListPanelPro
       <div className="space-y-1.5 rounded-lg border border-neutral-800 bg-neutral-900/40 p-2" aria-label="AI writing">
         <div className="flex flex-wrap items-center gap-1.5">
           <Button size="sm" onClick={() => void writeShotList()} disabled={!show || locked || busy !== null || (!scene.action.trim() && scene.dialogue.length === 0)} aria-label="Write shot list with AI"><Sparkles size={12} /> {busy === "list" ? "Writing…" : "Write shot list with AI"}</Button>
+          <Button size="sm" onClick={() => void magoBreakdown()} disabled={!show || locked || busy !== null || (!scene.action.trim() && scene.dialogue.length === 0)} aria-label="Break down with Mago's engine"><Sparkles size={12} /> {busy === "mago" ? "Breaking down…" : "Break down with Mago's engine"}</Button>
           <Button size="sm" onClick={() => void fillPrompts()} disabled={!show || busy !== null || !hasMissingPrompts(list)} aria-label="Fill missing prompts with AI"><Sparkles size={12} /> {busy === "prompts" ? "Writing…" : "Fill missing prompts"}</Button>
           {busy && <Button size="sm" variant="subtle" onClick={() => abort.current?.abort()} aria-label="Cancel AI request"><X size={12} /> Cancel</Button>}
         </div>
@@ -154,6 +176,8 @@ export function ShotListPanel({ show, scene, set, characters }: ShotListPanelPro
           </li>
         ))}
       </ol>
+
+      <ClipPrompts key={scene.id} show={show} scene={scene} set={set} characters={characters} shots={list} />
     </div>
   );
 }

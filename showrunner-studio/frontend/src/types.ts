@@ -65,7 +65,15 @@ export interface SceneEntity {
   intExt?: IntExt; // screenplay heading parts
   timeOfDayTag?: string; // "DAY", "NIGHT", "DAWN"...
   summary?: string; // one-line card text on the beat board
+  clipPrompts?: ClipPrompts; // prompts composed from this scene's shot list
   createdAt: number;
+  updatedAt: number;
+}
+
+/** Whole-scene prompts built by Mago's writing engine from the shot list, saved for the Mago package. */
+export interface ClipPrompts {
+  storyboard: string; // one sheet, one panel per shot
+  video: string; // the composed video prompt document
   updatedAt: number;
 }
 

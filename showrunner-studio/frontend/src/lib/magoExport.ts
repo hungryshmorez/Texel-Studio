@@ -90,7 +90,7 @@ function environmentLine(s: SetEntity): string {
 }
 
 /** Plain screenplay text: the heading, action and dialogue, with no Fountain syntax or writer's notes. */
-function screenplayText(scene: SceneEntity, set: SetEntity | undefined, characters: CharacterEntity[]): string {
+export function screenplayText(scene: SceneEntity, set: SetEntity | undefined, characters: CharacterEntity[]): string {
   const blocks = [plainHeading(scene, set)];
   if (scene.action.trim()) blocks.push(scene.action.trim());
   for (const line of scene.dialogue) {
@@ -178,11 +178,14 @@ export function buildBridge(input: BridgeInput): BridgePackage {
         "",
         "VIDEO PROMPTS (one per shot, if you want to render shots separately)",
         ...shotTimings(shots).map(({ shot }, i) => `[Shot ${i + 1}] ${shot.videoPrompt.trim() || "(not written)"}`),
+        ...(scene.clipPrompts?.storyboard.trim() ? ["", "STORYBOARD SHEET PROMPT (whole scene, one panel per shot)", scene.clipPrompts.storyboard.trim()] : []),
+        ...(scene.clipPrompts?.video.trim() ? ["", "COMPOSED VIDEO PROMPT (whole scene as one clip)", scene.clipPrompts.video.trim()] : []),
       ].join("\n") + "\n";
       files.push({ path: `${base}.txt`, text: body });
       shotFiles.push({ path: `${base}.txt`, scene: scene.sceneName });
       storyboard.push(`## ${episode.title} · ${scene.sceneName}`, `_${heading}_`, "");
       shotTimings(shots).forEach(({ shot }, i) => storyboard.push(`${i + 1}. ${shot.storyboardPrompt.trim() || "(not written)"}`));
+      if (scene.clipPrompts?.storyboard.trim()) storyboard.push("", "Whole-scene sheet prompt:", "", scene.clipPrompts.storyboard.trim());
       storyboard.push("");
     }
   }
